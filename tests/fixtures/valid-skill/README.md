@@ -14,4 +14,14 @@ npx skills add test/test-skill
 
 ## Usage
 
+After installing the skill, try these prompts with your agent:
+
 - `Run test skill`
+
+### CLI usage
+
+You can also run the script directly:
+
+```bash
+test-skill run
+```

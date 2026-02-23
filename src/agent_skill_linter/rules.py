@@ -40,6 +40,17 @@ def _body_after_frontmatter(text: str) -> str:
     return text
 
 
+def _extract_section_content(text: str, heading_pattern: str) -> str | None:
+    """Return the body of the first matching section (up to the next equal/higher heading)."""
+    m = re.search(heading_pattern, text, re.MULTILINE)
+    if not m:
+        return None
+    level = len(re.match(r"^(#+)", m.group()).group(1))
+    rest = text[m.end():]
+    end = re.search(rf"^#{{1,{level}}}\s", rest, re.MULTILINE)
+    return rest[: end.start()] if end else rest
+
+
 # ---------------------------------------------------------------------------
 # Rule 1: SKILL.md spec compliance (via skills-ref)
 # ---------------------------------------------------------------------------
@@ -209,15 +220,18 @@ def check_installation_section(skill_dir: Path) -> list[LintResult]:
 
 
 # ---------------------------------------------------------------------------
-# Rule 7: README has Usage section with starter prompts
+# Rule 7: README has Usage section with starter prompts and CLI subsection
 # ---------------------------------------------------------------------------
+
+_USAGE_HEADING = r"^#{1,3}\s+.*[Uu]sage"
+
 
 def check_usage_section(skill_dir: Path) -> list[LintResult]:
     text = _read_text(skill_dir / "README.md")
     if text is None:
         return []  # Rule 4 already flags missing README
 
-    if not re.search(r"^#{1,3}\s+.*[Uu]sage", text, re.MULTILINE):
+    if not re.search(_USAGE_HEADING, text, re.MULTILINE):
         return [LintResult(
             rule_id=7,
             severity=Severity.WARNING,
@@ -225,7 +239,30 @@ def check_usage_section(skill_dir: Path) -> list[LintResult]:
             fixable=True,
             file="README.md",
         )]
-    return []
+
+    results: list[LintResult] = []
+    section = _extract_section_content(text, _USAGE_HEADING)
+
+    if section is not None and not re.search(r"-\s+`[^`]+`", section):
+        results.append(LintResult(
+            rule_id=7,
+            severity=Severity.WARNING,
+            message=(
+                "README.md Usage section is missing starter prompt examples "
+                "(e.g. - `Try this prompt`)."
+            ),
+            file="README.md",
+        ))
+
+    if section is not None and not re.search(r"^#{2,4}\s+.*CLI", section, re.MULTILINE | re.IGNORECASE):
+        results.append(LintResult(
+            rule_id=7,
+            severity=Severity.INFO,
+            message="README.md Usage section is missing a CLI usage subsection.",
+            file="README.md",
+        ))
+
+    return results
 
 
 # ---------------------------------------------------------------------------

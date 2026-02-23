@@ -150,6 +150,22 @@ class TestRule7:
         results = rules.check_usage_section(FIXTURES / "valid-skill")
         assert results == []
 
+    def test_usage_section_missing_prompts(self, tmp_path):
+        (tmp_path / "README.md").write_text(
+            "# Skill\n\n## Usage\n\nSome text.\n\n### CLI usage\n\n```bash\nfoo\n```\n"
+        )
+        results = rules.check_usage_section(tmp_path)
+        messages = [r.message for r in results]
+        assert any("starter prompt" in m for m in messages)
+
+    def test_usage_section_missing_cli(self, tmp_path):
+        (tmp_path / "README.md").write_text(
+            "# Skill\n\n## Usage\n\nAfter installing:\n\n- `Try this prompt`\n"
+        )
+        results = rules.check_usage_section(tmp_path)
+        messages = [r.message for r in results]
+        assert any("CLI" in m for m in messages)
+
 
 # ---------------------------------------------------------------------------
 # Rule 8: Content dedup

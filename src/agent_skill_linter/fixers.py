@@ -301,6 +301,14 @@ After installing the skill, try these prompts with your agent:
 
 - `TODO: Add a starter prompt here`
 - `TODO: Add another starter prompt`
+
+### CLI usage
+
+You can also run the script directly:
+
+```bash
+TODO: skill-name command [options]
+```
 """
 
 
