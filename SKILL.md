@@ -36,3 +36,38 @@ skill-lint check ./my-skill --format json  # JSON output for CI
 ```
 
 Exit code 1 on errors, 0 otherwise.
+
+## Templates
+
+### Installation section (for README.md)
+
+When fixing a missing or incomplete Installation section, use this template (replace `{owner}/{repo}` with the actual GitHub slug):
+
+````markdown
+## Installation
+
+### Recommended: `npx skills`
+
+```bash
+npx skills add {owner}/{repo}
+```
+
+### Manual installation
+
+Copy the skill directory to your agent's skill folder:
+
+| Agent | Directory |
+|-------|-----------|
+| Claude Code | `~/.claude/skills/` |
+| Cursor | `.cursor/skills/` |
+| Gemini CLI | `.gemini/skills/` |
+| Amp | `.amp/skills/` |
+| Roo Code | `.roo/skills/` |
+| Copilot | `.github/skills/` |
+
+### As a CLI tool
+
+```bash
+uv tool install git+https://github.com/{owner}/{repo}
+```
+````
