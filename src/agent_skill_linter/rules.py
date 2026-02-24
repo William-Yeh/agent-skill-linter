@@ -1,4 +1,4 @@
-"""All 10 lint rule implementations."""
+"""All 12 lint rule implementations."""
 
 from __future__ import annotations
 
@@ -351,3 +351,58 @@ def check_nonstandard_dirs(skill_dir: Path) -> list[LintResult]:
                 ),
             ))
     return results
+
+
+# ---------------------------------------------------------------------------
+# Rule 11: CSO — description starts with "Use when"
+# ---------------------------------------------------------------------------
+
+def check_cso_description(skill_dir: Path) -> list[LintResult]:
+    text = _read_text(skill_dir / "SKILL.md")
+    if text is None:
+        return []
+
+    fm = _parse_frontmatter(text)
+    description = str(fm.get("description", "")).strip()
+    if not description:
+        return []
+
+    if not description.startswith("Use when"):
+        return [LintResult(
+            rule_id=11,
+            severity=Severity.WARNING,
+            message=(
+                "SKILL.md description should start with 'Use when...' "
+                "(CSO: triggering conditions only, not workflow summary)."
+            ),
+            file="SKILL.md",
+        )]
+    return []
+
+
+# ---------------------------------------------------------------------------
+# Rule 12: CSO — name should be action-oriented (gerund preferred)
+# ---------------------------------------------------------------------------
+
+def check_cso_name(skill_dir: Path) -> list[LintResult]:
+    text = _read_text(skill_dir / "SKILL.md")
+    if text is None:
+        return []
+
+    fm = _parse_frontmatter(text)
+    name = str(fm.get("name", "")).strip()
+    if not name:
+        return []
+
+    has_gerund = any(seg.endswith("ing") for seg in name.split("-"))
+    if not has_gerund:
+        return [LintResult(
+            rule_id=12,
+            severity=Severity.INFO,
+            message=(
+                f"SKILL.md name '{name}' may benefit from action-oriented naming "
+                "(CSO: prefer gerunds like 'creating-skills' over noun forms)."
+            ),
+            file="SKILL.md",
+        )]
+    return []

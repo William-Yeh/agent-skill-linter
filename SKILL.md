@@ -1,14 +1,14 @@
 ---
 name: agent-skill-linter
 description: >
-  Lint agent skills for spec compliance and publishing readiness.
-  Checks SKILL.md frontmatter, LICENSE, README badges, CI workflow,
-  installation/usage sections, content dedup, and body length.
-  Auto-fixes common issues with --fix.
+  Use when publishing an agent skill to GitHub or checking an existing skill
+  for spec compliance and readiness. Triggers on: SKILL.md frontmatter
+  violations, missing LICENSE, missing README badges, no CI workflow,
+  incomplete installation or usage docs.
 metadata:
   author: William Yeh <william.pjyeh@gmail.com>
   license: Apache-2.0
-  version: 0.3.0
+  version: 0.4.0
 ---
 
 # Agent Skill Linter
@@ -27,6 +27,8 @@ A linter that checks agent skills for spec compliance and publishing readiness.
 8. **Content dedup** — flags heavy overlap between README.md and SKILL.md
 9. **Body length** — SKILL.md body under 500 lines
 10. **Directory structure** — flags non-standard directories
+11. **CSO description** — description starts with "Use when..." (triggering conditions, not workflow summary)
+12. **CSO name** — name is action-oriented (gerund preferred over noun forms)
 
 ## Running
 

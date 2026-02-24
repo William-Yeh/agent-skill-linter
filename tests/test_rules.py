@@ -224,6 +224,63 @@ class TestRule10:
 
 
 # ---------------------------------------------------------------------------
+# Rule 11: CSO description
+# ---------------------------------------------------------------------------
+
+
+class TestRule11:
+    def test_description_not_use_when(self, tmp_path):
+        (tmp_path / "SKILL.md").write_text(
+            "---\nname: my-skill\ndescription: Lint skills for compliance.\n---\n\n# Body\n"
+        )
+        results = rules.check_cso_description(tmp_path)
+        assert len(results) == 1
+        assert results[0].severity == Severity.WARNING
+        assert "Use when" in results[0].message
+
+    def test_description_starts_use_when(self, tmp_path):
+        (tmp_path / "SKILL.md").write_text(
+            "---\nname: my-skill\ndescription: Use when linting a skill before publishing.\n---\n\n# Body\n"
+        )
+        results = rules.check_cso_description(tmp_path)
+        assert results == []
+
+    def test_valid_skill(self):
+        results = rules.check_cso_description(FIXTURES / "valid-skill")
+        assert results == []
+
+
+# ---------------------------------------------------------------------------
+# Rule 12: CSO name
+# ---------------------------------------------------------------------------
+
+
+class TestRule12:
+    def test_noun_form_name(self, tmp_path):
+        (tmp_path / "SKILL.md").write_text(
+            "---\nname: pdf-processor\ndescription: Use when working with PDFs.\n---\n\n# Body\n"
+        )
+        results = rules.check_cso_name(tmp_path)
+        assert len(results) == 1
+        assert results[0].severity == Severity.INFO
+        assert "pdf-processor" in results[0].message
+
+    def test_gerund_name(self, tmp_path):
+        (tmp_path / "SKILL.md").write_text(
+            "---\nname: processing-pdfs\ndescription: Use when working with PDFs.\n---\n\n# Body\n"
+        )
+        results = rules.check_cso_name(tmp_path)
+        assert results == []
+
+    def test_gerund_suffix(self, tmp_path):
+        (tmp_path / "SKILL.md").write_text(
+            "---\nname: condition-based-waiting\ndescription: Use when tests are flaky.\n---\n\n# Body\n"
+        )
+        results = rules.check_cso_name(tmp_path)
+        assert results == []
+
+
+# ---------------------------------------------------------------------------
 # Integration: --fix on broken fixture
 # ---------------------------------------------------------------------------
 

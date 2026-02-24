@@ -1,6 +1,6 @@
 ---
 name: valid-skill
-description: A test skill for fixture validation
+description: Use when validating test fixtures for spec compliance.
 metadata:
   author: Test Author
 ---

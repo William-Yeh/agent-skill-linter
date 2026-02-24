@@ -70,3 +70,5 @@ Exit code: 1 if errors, 0 otherwise.
 | 8 | Content dedup between README.md and SKILL.md | Info | No |
 | 9 | SKILL.md body < 500 lines | Info | No |
 | 10 | Non-standard dirs flagged | Info | No |
+| 11 | CSO: description starts with "Use when..." | Warning | No |
+| 12 | CSO: name is action-oriented (gerund preferred) | Info | No |
