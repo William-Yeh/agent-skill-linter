@@ -27,6 +27,7 @@ def lint_skill(path: str | Path) -> list[LintResult]:
         rules.check_nonstandard_dirs,
         rules.check_cso_description,
         rules.check_cso_name,
+        rules.check_python_invocations,
     ]
     for fn in rule_fns:
         results.extend(fn(skill_dir))

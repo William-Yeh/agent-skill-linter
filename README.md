@@ -72,3 +72,4 @@ Exit code: 1 if errors, 0 otherwise.
 | 10 | Non-standard dirs flagged | Info | No |
 | 11 | CSO: description starts with "Use when..." | Warning | No |
 | 12 | CSO: name is action-oriented (gerund preferred) | Info | No |
+| 13 | Python invocation consistency (`uv run python` in uv projects) | Warning | No |

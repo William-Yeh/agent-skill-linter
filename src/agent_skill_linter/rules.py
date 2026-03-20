@@ -1,8 +1,9 @@
-"""All 12 lint rule implementations."""
+"""All lint rule implementations."""
 
 from __future__ import annotations
 
 import re
+import tomllib
 from datetime import datetime
 from pathlib import Path
 
@@ -406,3 +407,110 @@ def check_cso_name(skill_dir: Path) -> list[LintResult]:
             file="SKILL.md",
         )]
     return []
+
+
+# ---------------------------------------------------------------------------
+# Rule 13: Python invocation consistency
+# ---------------------------------------------------------------------------
+
+_SKIP_DIRS = frozenset({".venv", "node_modules", "__pycache__", ".git", ".pytest_cache"})
+_BAD_PYTHON_RE = re.compile(r"^python3?\s+")
+_HEREDOC_RE = re.compile(r"^python3?\s+-\s*<<")
+_WRAPPED_RE = re.compile(r"^(uv|poetry|pipenv)\s+run\s+python")
+
+
+def _uses_uv(skill_dir: Path) -> bool:
+    """Return True if this directory is a uv-managed project."""
+    if (skill_dir / "uv.lock").is_file():
+        return True
+    text = _read_text(skill_dir / "pyproject.toml")
+    return bool(text and "uv_build" in text)
+
+
+def _has_non_stdlib_deps(skill_dir: Path) -> bool:
+    """Return True if pyproject.toml declares non-stdlib dependencies."""
+    text = _read_text(skill_dir / "pyproject.toml")
+    if not text:
+        return False
+    try:
+        data = tomllib.loads(text)
+    except tomllib.TOMLDecodeError:
+        return False
+    return bool(data.get("project", {}).get("dependencies"))
+
+
+def _scan_markdown_for_bad_python(text: str) -> bool:
+    """Return True if any bash code block contains a bare python/python3 invocation."""
+    in_bash = False
+    for line in text.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("```"):
+            if not in_bash:
+                lang = stripped[3:].strip().lower()
+                in_bash = lang in ("bash", "sh", "shell", "zsh", "")
+            else:
+                in_bash = False
+            continue
+        if not in_bash:
+            continue
+        if _BAD_PYTHON_RE.match(stripped) and not _HEREDOC_RE.match(stripped) and not _WRAPPED_RE.match(stripped):
+            return True
+    return False
+
+
+def _scan_yaml_for_bad_python(text: str) -> bool:
+    """Return True if any run step contains a bare python/python3 invocation."""
+    for line in text.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("#"):
+            continue
+        # Normalise "run: python3 ..." and "- run: python3 ..." to just the command
+        candidate = re.sub(r"^-?\s*run:\s*", "", stripped) if re.match(r"^-?\s*run:\s*\S", stripped) else stripped
+        if _BAD_PYTHON_RE.match(candidate) and not _HEREDOC_RE.match(candidate) and not _WRAPPED_RE.match(candidate):
+            return True
+    return False
+
+
+def check_python_invocations(skill_dir: Path) -> list[LintResult]:
+    """Rule 13: docs must use `uv run python` when project is uv-managed with non-stdlib deps."""
+    if not _uses_uv(skill_dir) or not _has_non_stdlib_deps(skill_dir):
+        return []
+
+    results: list[LintResult] = []
+
+    for md_file in sorted(skill_dir.rglob("*.md")):
+        if any(part in _SKIP_DIRS for part in md_file.parts):
+            continue
+        text = _read_text(md_file)
+        if text and _scan_markdown_for_bad_python(text):
+            rel = str(md_file.relative_to(skill_dir))
+            results.append(LintResult(
+                rule_id=13,
+                severity=Severity.WARNING,
+                message=(
+                    f"`{rel}` contains a bare `python`/`python3` invocation in a bash code block. "
+                    "Use `uv run python` for uv-managed projects with non-stdlib dependencies."
+                ),
+                file=rel,
+            ))
+
+    # Only scan CI workflow files — other YAML (Docker Compose, Taskfiles, etc.)
+    # uses different keys and would produce false positives.
+    wf_dir = skill_dir / ".github" / "workflows"
+    if wf_dir.is_dir():
+        yml_files = sorted(list(wf_dir.glob("*.yml")) + list(wf_dir.glob("*.yaml")))
+        for yml_file in yml_files:
+            text = _read_text(yml_file)
+            if text and _scan_yaml_for_bad_python(text):
+                rel = str(yml_file.relative_to(skill_dir))
+                results.append(LintResult(
+                    rule_id=13,
+                    severity=Severity.WARNING,
+                    message=(
+                        f"`{rel}` contains a bare `python`/`python3` invocation in a run step. "
+                        "Use `uv run python` for uv-managed projects with non-stdlib dependencies."
+                    ),
+                    file=rel,
+                ))
+
+    return results

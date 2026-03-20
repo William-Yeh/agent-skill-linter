@@ -8,7 +8,7 @@ description: >
 metadata:
   author: William Yeh <william.pjyeh@gmail.com>
   license: Apache-2.0
-  version: 0.4.0
+  version: 0.5.0
 ---
 
 # Agent Skill Linter
@@ -29,6 +29,7 @@ A linter that checks agent skills for spec compliance and publishing readiness.
 10. **Directory structure** — flags non-standard directories
 11. **CSO description** — description starts with "Use when..." (triggering conditions, not workflow summary)
 12. **CSO name** — name is action-oriented (gerund preferred over noun forms)
+13. **Python invocation consistency** — docs use `uv run python` when project is uv-managed with non-stdlib deps; exceptions for heredoc one-liners using only stdlib
 
 ## Running
 

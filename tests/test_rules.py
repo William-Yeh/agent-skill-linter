@@ -281,6 +281,93 @@ class TestRule12:
 
 
 # ---------------------------------------------------------------------------
+# Rule 13: Python invocation consistency
+# ---------------------------------------------------------------------------
+
+_UV_PYPROJECT = (
+    '[project]\nname = "foo"\ndependencies = ["click"]\n'
+    '[build-system]\nrequires = ["uv_build>=0.1"]\nbuild-backend = "uv_build"\n'
+)
+
+
+class TestRule13:
+    def _setup_uv_project(self, tmp_path, readme=None, ci_yml=None):
+        (tmp_path / "uv.lock").write_text("")
+        (tmp_path / "pyproject.toml").write_text(_UV_PYPROJECT)
+        if readme is not None:
+            (tmp_path / "README.md").write_text(readme)
+        if ci_yml is not None:
+            wf = tmp_path / ".github" / "workflows"
+            wf.mkdir(parents=True)
+            (wf / "ci.yml").write_text(ci_yml)
+
+    def test_bare_python_in_readme(self, tmp_path):
+        self._setup_uv_project(tmp_path, readme="# Docs\n\n```bash\npython scripts/run.py\n```\n")
+        results = rules.check_python_invocations(tmp_path)
+        assert len(results) == 1
+        assert results[0].rule_id == 13
+        assert results[0].severity == Severity.WARNING
+        assert "README.md" in results[0].message
+
+    def test_bare_python3_in_readme(self, tmp_path):
+        self._setup_uv_project(tmp_path, readme="# Docs\n\n```bash\npython3 scripts/run.py\n```\n")
+        results = rules.check_python_invocations(tmp_path)
+        assert len(results) == 1
+
+    def test_uv_run_python_is_ok(self, tmp_path):
+        self._setup_uv_project(tmp_path, readme="# Docs\n\n```bash\nuv run python scripts/run.py\n```\n")
+        assert rules.check_python_invocations(tmp_path) == []
+
+    def test_heredoc_exception(self, tmp_path):
+        readme = "# Docs\n\n```bash\npython3 - <<'EOF'\nimport sys\nprint(sys.version)\nEOF\n```\n"
+        self._setup_uv_project(tmp_path, readme=readme)
+        assert rules.check_python_invocations(tmp_path) == []
+
+    def test_no_uv_project(self, tmp_path):
+        # Plain setuptools project with no uv.lock and no uv_build backend
+        (tmp_path / "pyproject.toml").write_text(
+            '[project]\nname = "foo"\ndependencies = ["click"]\n'
+            '[build-system]\nrequires = ["setuptools"]\nbuild-backend = "setuptools.build_meta"\n'
+        )
+        (tmp_path / "README.md").write_text("# Docs\n\n```bash\npython3 run.py\n```\n")
+        assert rules.check_python_invocations(tmp_path) == []
+
+    def test_empty_deps(self, tmp_path):
+        (tmp_path / "uv.lock").write_text("")
+        (tmp_path / "pyproject.toml").write_text('[project]\nname = "foo"\ndependencies = []\n')
+        (tmp_path / "README.md").write_text("# Docs\n\n```bash\npython3 run.py\n```\n")
+        assert rules.check_python_invocations(tmp_path) == []
+
+    def test_bare_python_in_ci_yml(self, tmp_path):
+        self._setup_uv_project(tmp_path, ci_yml="steps:\n  - run: python3 scripts/foo.py\n")
+        results = rules.check_python_invocations(tmp_path)
+        assert len(results) == 1
+        assert ".github/workflows/ci.yml" in results[0].file
+
+    def test_uv_run_in_ci_yml_is_ok(self, tmp_path):
+        self._setup_uv_project(tmp_path, ci_yml="steps:\n  - run: uv run python scripts/foo.py\n")
+        assert rules.check_python_invocations(tmp_path) == []
+
+    def test_yaml_extension_scanned(self, tmp_path):
+        (tmp_path / "uv.lock").write_text("")
+        (tmp_path / "pyproject.toml").write_text(_UV_PYPROJECT)
+        wf = tmp_path / ".github" / "workflows"
+        wf.mkdir(parents=True)
+        (wf / "ci.yaml").write_text("steps:\n  - run: python3 scripts/foo.py\n")
+        results = rules.check_python_invocations(tmp_path)
+        assert len(results) == 1
+        assert ".github/workflows/ci.yaml" in results[0].file
+
+    def test_non_ci_yaml_ignored(self, tmp_path):
+        self._setup_uv_project(tmp_path)
+        (tmp_path / "docker-compose.yml").write_text("services:\n  app:\n    run: python3 app.py\n")
+        assert rules.check_python_invocations(tmp_path) == []
+
+    def test_valid_skill_passes(self):
+        assert rules.check_python_invocations(FIXTURES / "valid-skill") == []
+
+
+# ---------------------------------------------------------------------------
 # Integration: --fix on broken fixture
 # ---------------------------------------------------------------------------
 
