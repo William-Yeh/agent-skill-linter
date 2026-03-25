@@ -5,6 +5,8 @@ from __future__ import annotations
 import shutil
 from pathlib import Path
 
+import pytest
+
 from agent_skill_linter.linter import lint_skill
 from agent_skill_linter.models import Severity
 from agent_skill_linter import rules
@@ -406,3 +408,350 @@ class TestFixIntegration:
         results = lint_skill(skill_dir)
         r5 = results_for_rule(results, 5)
         assert len(r5) == 0
+
+
+# ---------------------------------------------------------------------------
+# Rule 14: Progressive disclosure
+# ---------------------------------------------------------------------------
+
+
+class TestRule14:
+    def test_detects_embedded_templates(self):
+        results = rules.check_progressive_disclosure(FIXTURES / "dense-skill")
+        assert len(results) == 1
+        assert results[0].rule_id == 14
+        assert results[0].fixable is True
+        assert "Templates" in results[0].message
+
+    def test_clean_skill_passes(self):
+        results = rules.check_progressive_disclosure(FIXTURES / "valid-skill")
+        assert results == []
+
+    def test_fix_moves_section_to_references(self, tmp_path):
+        shutil.copytree(FIXTURES / "dense-skill", tmp_path / "skill", dirs_exist_ok=True)
+        skill_dir = tmp_path / "skill"
+
+        from agent_skill_linter.fixers import fix_progressive_disclosure
+        from agent_skill_linter.models import LintResult
+
+        fix_progressive_disclosure(skill_dir, LintResult(rule_id=14, severity=Severity.WARNING, message=""))
+
+        # SKILL.md no longer has 4-backtick fences
+        skill_text = (skill_dir / "SKILL.md").read_text()
+        assert "````" not in skill_text
+        assert "references/fix-templates.md" in skill_text
+
+        # references/fix-templates.md now exists and contains the extracted content
+        tmpl = skill_dir / "references" / "fix-templates.md"
+        assert tmpl.is_file()
+        assert "````" in tmpl.read_text()
+
+        # Re-lint: rule 14 no longer fires
+        results = rules.check_progressive_disclosure(skill_dir)
+        assert results == []
+
+
+# ---------------------------------------------------------------------------
+# Rule 15: Semantic reference-tier sections
+# ---------------------------------------------------------------------------
+
+
+class TestRule15:
+    def test_detects_reference_tier_headings(self):
+        results = rules.check_semantic_sections(FIXTURES / "semantic-sections")
+        assert len(results) == 1
+        r = results[0]
+        assert r.rule_id == 15
+        assert r.fixable is True
+        assert "Troubleshooting" in r.message
+        assert "Advanced" in r.message
+
+    def test_clean_skill_passes(self):
+        results = rules.check_semantic_sections(FIXTURES / "valid-skill")
+        assert results == []
+
+    def test_fix_routes_to_correct_reference_files(self, tmp_path):
+        shutil.copytree(FIXTURES / "semantic-sections", tmp_path / "skill", dirs_exist_ok=True)
+        skill_dir = tmp_path / "skill"
+
+        from agent_skill_linter.fixers import fix_semantic_sections
+        from agent_skill_linter.models import LintResult
+
+        fix_semantic_sections(skill_dir, LintResult(rule_id=15, severity=Severity.WARNING, message=""))
+
+        skill_text = (skill_dir / "SKILL.md").read_text()
+        assert "references/troubleshooting.md" in skill_text
+        assert "references/advanced.md" in skill_text
+        assert (skill_dir / "references" / "troubleshooting.md").is_file()
+        assert (skill_dir / "references" / "advanced.md").is_file()
+
+        # Re-lint: rule 15 no longer fires
+        assert rules.check_semantic_sections(skill_dir) == []
+
+
+# ---------------------------------------------------------------------------
+# Rule 16: Heavy step-conditional sections
+# ---------------------------------------------------------------------------
+
+
+def _make_step_skill(tmp_path, step_lines: int) -> Path:
+    skill_dir = tmp_path / "skill"
+    skill_dir.mkdir()
+    body_lines = "\n".join(f"- detail line {i}" for i in range(step_lines))
+    (skill_dir / "SKILL.md").write_text(
+        f"---\nname: step-skill\ndescription: Use when testing.\nmetadata:\n  author: T\n---\n\n"
+        f"## Quick Start\n\nRun the tool.\n\n"
+        f"## Step 2 — Apply fixes\n\n{body_lines}\n",
+        encoding="utf-8",
+    )
+    return skill_dir
+
+
+class TestRule16:
+    def test_detects_heavy_step_section(self, tmp_path):
+        skill_dir = _make_step_skill(tmp_path, step_lines=35)
+        results = rules.check_step_conditional_sections(skill_dir)
+        assert len(results) == 1
+        r = results[0]
+        assert r.rule_id == 16
+        assert r.fixable is False
+        assert "Step 2" in r.message
+
+    def test_short_step_section_passes(self, tmp_path):
+        skill_dir = _make_step_skill(tmp_path, step_lines=10)
+        results = rules.check_step_conditional_sections(skill_dir)
+        assert results == []
+
+    def test_non_step_heading_not_flagged(self):
+        results = rules.check_step_conditional_sections(FIXTURES / "valid-skill")
+        assert results == []
+
+
+# ---------------------------------------------------------------------------
+# Rule 14 — additional edge cases
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture()
+def dense_skill(tmp_path) -> Path:
+    skill_dir = tmp_path / "skill"
+    shutil.copytree(FIXTURES / "dense-skill", skill_dir, dirs_exist_ok=True)
+    return skill_dir
+
+
+def test_rule14_fix_idempotent(dense_skill):
+    """Calling the fixer twice must not duplicate content in references/."""
+    from agent_skill_linter.fixers import fix_progressive_disclosure
+    from agent_skill_linter.models import LintResult
+
+    skill_dir = dense_skill
+    stub = LintResult(rule_id=14, severity=Severity.WARNING, message="")
+
+    fix_progressive_disclosure(skill_dir, stub)
+    after_first = (skill_dir / "references" / "fix-templates.md").read_text()
+
+    fix_progressive_disclosure(skill_dir, stub)  # no 4-backtick fences remain
+    after_second = (skill_dir / "references" / "fix-templates.md").read_text()
+
+    assert after_first == after_second
+
+
+def test_rule14_fix_appends_to_existing_references(dense_skill):
+    """Fixer must append to an existing references/fix-templates.md, not overwrite."""
+    from agent_skill_linter.fixers import fix_progressive_disclosure
+    from agent_skill_linter.models import LintResult
+
+    skill_dir = dense_skill
+    refs_dir = skill_dir / "references"
+    refs_dir.mkdir()
+    prior = "# Fix Templates\n\nPrior content.\n"
+    (refs_dir / "fix-templates.md").write_text(prior)
+
+    fix_progressive_disclosure(skill_dir, LintResult(rule_id=14, severity=Severity.WARNING, message=""))
+
+    result = (refs_dir / "fix-templates.md").read_text()
+    assert "Prior content." in result
+    assert "````" in result  # newly extracted template appended
+
+
+def test_rule14_multiple_template_sections(tmp_path):
+    """All 4-backtick sections are extracted, not just the first."""
+    skill_dir = tmp_path / "skill"
+    skill_dir.mkdir()
+    (skill_dir / "SKILL.md").write_text(
+        "---\nname: t\ndescription: Use when.\nmetadata:\n  author: T\n---\n\n"
+        "## Templates A\n\n````markdown\n# A\n````\n\n"
+        "## Templates B\n\n````markdown\n# B\n````\n",
+        encoding="utf-8",
+    )
+
+    results = rules.check_progressive_disclosure(skill_dir)
+    assert len(results) == 1
+    assert "Templates A" in results[0].message
+    assert "Templates B" in results[0].message
+
+    from agent_skill_linter.fixers import fix_progressive_disclosure
+    fix_progressive_disclosure(skill_dir, results[0])
+
+    skill_text = (skill_dir / "SKILL.md").read_text()
+    assert "````" not in skill_text
+    tmpl_text = (skill_dir / "references" / "fix-templates.md").read_text()
+    assert "# A" in tmpl_text
+    assert "# B" in tmpl_text
+
+
+# ---------------------------------------------------------------------------
+# Rule 15 — additional edge cases
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture()
+def semantic_skill(tmp_path) -> Path:
+    skill_dir = tmp_path / "skill"
+    shutil.copytree(FIXTURES / "semantic-sections", skill_dir, dirs_exist_ok=True)
+    return skill_dir
+
+
+def test_rule15_fix_idempotent(semantic_skill):
+    """Calling the fixer twice must not duplicate content in references/."""
+    from agent_skill_linter.fixers import fix_semantic_sections
+    from agent_skill_linter.models import LintResult
+
+    skill_dir = semantic_skill
+    stub = LintResult(rule_id=15, severity=Severity.WARNING, message="")
+
+    fix_semantic_sections(skill_dir, stub)
+    ts_after_first = (skill_dir / "references" / "troubleshooting.md").read_text()
+
+    fix_semantic_sections(skill_dir, stub)  # sections are now pointers — no-op
+    ts_after_second = (skill_dir / "references" / "troubleshooting.md").read_text()
+
+    assert ts_after_first == ts_after_second
+
+
+def test_rule15_fix_appends_to_existing_references(semantic_skill):
+    """Fixer must append to a pre-existing references/ file, not overwrite it."""
+    from agent_skill_linter.fixers import fix_semantic_sections
+    from agent_skill_linter.models import LintResult
+
+    skill_dir = semantic_skill
+    refs_dir = skill_dir / "references"
+    refs_dir.mkdir()
+    prior = "# Troubleshooting\n\nExisting guidance.\n"
+    (refs_dir / "troubleshooting.md").write_text(prior)
+
+    fix_semantic_sections(skill_dir, LintResult(rule_id=15, severity=Severity.WARNING, message=""))
+
+    result = (refs_dir / "troubleshooting.md").read_text()
+    assert "Existing guidance." in result
+    assert "Error A" in result  # newly extracted content appended
+
+
+def test_rule15_two_sections_same_target(tmp_path):
+    """Troubleshooting and FAQ both route to troubleshooting.md."""
+    skill_dir = tmp_path / "skill"
+    skill_dir.mkdir()
+    (skill_dir / "SKILL.md").write_text(
+        "---\nname: t\ndescription: Use when.\nmetadata:\n  author: T\n---\n\n"
+        "## Troubleshooting\n\nCheck logs.\n\n"
+        "## FAQ\n\nQ: Why? A: Because.\n",
+        encoding="utf-8",
+    )
+
+    results = rules.check_semantic_sections(skill_dir)
+    assert len(results) == 1
+    assert "Troubleshooting" in results[0].message
+    assert "FAQ" in results[0].message
+
+    from agent_skill_linter.fixers import fix_semantic_sections
+    fix_semantic_sections(skill_dir, results[0])
+
+    ts = skill_dir / "references" / "troubleshooting.md"
+    assert ts.is_file()
+    assert not (skill_dir / "references" / "faq.md").is_file()  # same target file
+    ts_text = ts.read_text()
+    assert "Check logs." in ts_text
+    assert "Why?" in ts_text
+
+
+def test_rule15_pointer_section_not_reflagged(tmp_path):
+    """A section already replaced with a pointer must not trigger the rule."""
+    skill_dir = tmp_path / "skill"
+    skill_dir.mkdir()
+    (skill_dir / "SKILL.md").write_text(
+        "---\nname: t\ndescription: Use when.\nmetadata:\n  author: T\n---\n\n"
+        "## Troubleshooting\n\n> See `references/troubleshooting.md`.\n",
+        encoding="utf-8",
+    )
+    assert rules.check_semantic_sections(skill_dir) == []
+
+
+# ---------------------------------------------------------------------------
+# Rule 16 — additional edge cases
+# ---------------------------------------------------------------------------
+
+
+def test_rule16_exactly_at_threshold_passes(tmp_path):
+    """A step section of exactly 30 lines must not trigger (threshold is >30).
+
+    The section body includes the heading line + blank line, so 28 detail
+    lines yield a 30-line section total — right at the threshold, not over.
+    """
+    skill_dir = _make_step_skill(tmp_path, step_lines=28)
+    assert rules.check_step_conditional_sections(skill_dir) == []
+
+
+def test_rule16_phase_heading_detected(tmp_path):
+    skill_dir = tmp_path / "skill"
+    skill_dir.mkdir()
+    body = "\n".join(f"- item {i}" for i in range(35))
+    (skill_dir / "SKILL.md").write_text(
+        f"---\nname: t\ndescription: Use when.\nmetadata:\n  author: T\n---\n\n"
+        f"## Phase 2 — Deploy\n\n{body}\n",
+        encoding="utf-8",
+    )
+    results = rules.check_step_conditional_sections(skill_dir)
+    assert len(results) == 1
+    assert "Phase 2" in results[0].message
+
+
+def test_rule16_numbered_heading_detected(tmp_path):
+    skill_dir = tmp_path / "skill"
+    skill_dir.mkdir()
+    body = "\n".join(f"- item {i}" for i in range(35))
+    (skill_dir / "SKILL.md").write_text(
+        f"---\nname: t\ndescription: Use when.\nmetadata:\n  author: T\n---\n\n"
+        f"## 3. Apply fixes\n\n{body}\n",
+        encoding="utf-8",
+    )
+    results = rules.check_step_conditional_sections(skill_dir)
+    assert len(results) == 1
+    assert "3." in results[0].message
+
+
+def test_rule16_after_heading_detected(tmp_path):
+    skill_dir = tmp_path / "skill"
+    skill_dir.mkdir()
+    body = "\n".join(f"- item {i}" for i in range(35))
+    (skill_dir / "SKILL.md").write_text(
+        f"---\nname: t\ndescription: Use when.\nmetadata:\n  author: T\n---\n\n"
+        f"## After running the scan\n\n{body}\n",
+        encoding="utf-8",
+    )
+    results = rules.check_step_conditional_sections(skill_dir)
+    assert len(results) == 1
+    assert "After running" in results[0].message
+
+
+def test_rule16_once_heading_detected(tmp_path):
+    skill_dir = tmp_path / "skill"
+    skill_dir.mkdir()
+    body = "\n".join(f"- item {i}" for i in range(35))
+    (skill_dir / "SKILL.md").write_text(
+        f"---\nname: t\ndescription: Use when.\nmetadata:\n  author: T\n---\n\n"
+        f"## Once complete\n\n{body}\n",
+        encoding="utf-8",
+    )
+    results = rules.check_step_conditional_sections(skill_dir)
+    assert len(results) == 1
+    assert "Once complete" in results[0].message

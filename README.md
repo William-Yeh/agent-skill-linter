@@ -37,9 +37,9 @@ uv tool install git+https://github.com/William-Yeh/agent-skill-linter
 
 After installing, try these prompts with your agent:
 
-- `Lint the skill in this repo for publishing readiness`
-- `Check my skill for spec compliance and fix any issues`
-- `Run skill-lint check . --fix to auto-fix common issues`
+- `Lint the skill in this directory for publishing readiness`
+- `Check ~/projects/my-skill for spec compliance and fix any issues`
+- `Triage this skill and tell me what's blocking a GitHub release`
 
 ### CLI
 
@@ -73,3 +73,6 @@ Exit code: 1 if errors, 0 otherwise.
 | 11 | CSO: description starts with "Use when..." | Warning | No |
 | 12 | CSO: name is action-oriented (gerund preferred) | Info | No |
 | 13 | Python invocation consistency (`uv run python` in uv projects) | Warning | No |
+| 14 | Progressive disclosure: embedded templates (4-backtick fences) → `references/` | Warning | Yes |
+| 15 | Progressive disclosure: reference-tier section headings (Troubleshooting, FAQ, Advanced…) → `references/` | Warning | Yes |
+| 16 | Progressive disclosure: heavy step-conditional sections (>30 lines) → `references/` | Info | No |

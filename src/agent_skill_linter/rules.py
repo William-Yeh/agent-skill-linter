@@ -471,6 +471,121 @@ def _scan_yaml_for_bad_python(text: str) -> bool:
     return False
 
 
+_REFERENCE_TIER_RE = re.compile(
+    r"\b(troubleshoot|faq|common[\s-]issue|background|architecture|how[\s-]it[\s-]works|"
+    r"glossary|terminolog|advanced|edge[\s-]case|examples?|changelog|history)",
+    re.IGNORECASE,
+)
+
+
+def check_semantic_sections(skill_dir: Path) -> list[LintResult]:
+    """Rule 15: H2 sections with reference-tier headings belong in references/."""
+    text = _read_text(skill_dir / "SKILL.md")
+    if text is None:
+        return []
+
+    body = _body_after_frontmatter(text)
+    headings = list(re.finditer(r"^## .+", body, re.MULTILINE))
+    flagged = []
+    for i, m in enumerate(headings):
+        if not _REFERENCE_TIER_RE.search(m.group()):
+            continue
+        end = headings[i + 1].start() if i + 1 < len(headings) else len(body)
+        section_body = body[m.end():end].strip()
+        if re.match(r"^>\s+See\s+`references/", section_body):
+            continue  # already a pointer — section was previously moved
+        flagged.append(m.group().lstrip("# ").strip())
+    if not flagged:
+        return []
+
+    names = ", ".join(f'"{s}"' for s in flagged)
+    return [LintResult(
+        rule_id=15,
+        severity=Severity.WARNING,
+        message=(
+            f"SKILL.md has reference-tier sections: {names}. "
+            "These are consulted reactively — move to references/."
+        ),
+        fixable=True,
+        file="SKILL.md",
+    )]
+
+
+_STEP_HEADING_RE = re.compile(
+    r"^## (?:\d+[\.\)]\s|"
+    r"(?:step|phase|stage)\s+\d+|"
+    r"after\s+|once\s+|if\s+)",
+    re.IGNORECASE,
+)
+_STEP_SECTION_THRESHOLD = 30
+
+
+def check_step_conditional_sections(skill_dir: Path) -> list[LintResult]:
+    """Rule 16: Heavy step-conditional sections in SKILL.md should move to references/."""
+    text = _read_text(skill_dir / "SKILL.md")
+    if text is None:
+        return []
+
+    body = _body_after_frontmatter(text)
+    headings = list(re.finditer(r"^## .+", body, re.MULTILINE))
+
+    heavy = []
+    for i, m in enumerate(headings):
+        if not _STEP_HEADING_RE.match(m.group()):
+            continue
+        end = headings[i + 1].start() if i + 1 < len(headings) else len(body)
+        line_count = len(body[m.start():end].splitlines())
+        if line_count > _STEP_SECTION_THRESHOLD:
+            heavy.append(m.group().lstrip("# ").strip())
+
+    if not heavy:
+        return []
+
+    names = ", ".join(f'"{s}"' for s in heavy)
+    return [LintResult(
+        rule_id=16,
+        severity=Severity.INFO,
+        message=(
+            f"SKILL.md has heavy step-conditional sections: {names} "
+            f"(>{_STEP_SECTION_THRESHOLD} lines). "
+            "Consider moving detail to references/ and leaving a pointer."
+        ),
+        file="SKILL.md",
+    )]
+
+
+def check_progressive_disclosure(skill_dir: Path) -> list[LintResult]:
+    """Rule 14: SKILL.md sections with 4-backtick fences should move to references/."""
+    text = _read_text(skill_dir / "SKILL.md")
+    if text is None:
+        return []
+
+    body = _body_after_frontmatter(text)
+    headings = list(re.finditer(r"^## .+", body, re.MULTILINE))
+
+    dense = []
+    for i, m in enumerate(headings):
+        end = headings[i + 1].start() if i + 1 < len(headings) else len(body)
+        section = body[m.start():end]
+        if re.search(r"^`{4,}", section, re.MULTILINE):
+            dense.append(m.group().lstrip("# ").strip())
+
+    if not dense:
+        return []
+
+    names = ", ".join(f'"{s}"' for s in dense)
+    return [LintResult(
+        rule_id=14,
+        severity=Severity.WARNING,
+        message=(
+            f"SKILL.md embeds template content in sections: {names}. "
+            "Move to references/ so agents load it only when needed."
+        ),
+        fixable=True,
+        file="SKILL.md",
+    )]
+
+
 def check_python_invocations(skill_dir: Path) -> list[LintResult]:
     """Rule 13: docs must use `uv run python` when project is uv-managed with non-stdlib deps."""
     if not _uses_uv(skill_dir) or not _has_non_stdlib_deps(skill_dir):

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 import subprocess
+from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
 
@@ -11,6 +12,7 @@ import click
 import yaml
 
 from agent_skill_linter.models import LintResult
+from agent_skill_linter.rules import _REFERENCE_TIER_RE
 
 # ---------------------------------------------------------------------------
 # Dispatcher
@@ -310,6 +312,115 @@ You can also run the script directly:
 TODO: skill-name command [options]
 ```
 """
+
+
+_KEYWORD_FILE_MAP = [
+    (re.compile(r"troubleshoot|faq|common.issue", re.I), "troubleshooting"),
+    (re.compile(r"background|architecture|how.it.works", re.I), "background"),
+    (re.compile(r"glossary|terminolog", re.I), "glossary"),
+    (re.compile(r"advanced|edge.case", re.I), "advanced"),
+    (re.compile(r"example", re.I), "examples"),
+    (re.compile(r"changelog|history|version", re.I), "changelog"),
+]
+
+
+def _heading_to_reffile(heading: str) -> str:
+    for pattern, filename in _KEYWORD_FILE_MAP:
+        if pattern.search(heading):
+            return filename
+    return re.sub(r"[^\w]+", "-", heading.lower()).strip("-")
+
+
+@_fixer(15)
+def fix_semantic_sections(skill_dir: Path, result: LintResult) -> None:
+    skill_md = skill_dir / "SKILL.md"
+    text = skill_md.read_text(encoding="utf-8")
+
+    fm_match = re.match(r"^---\s*\n.*?\n---\s*\n?", text, re.DOTALL)
+    body_start = fm_match.end() if fm_match else 0
+    frontmatter = text[:body_start]
+    body = text[body_start:]
+
+    headings = list(re.finditer(r"^## .+", body, re.MULTILINE))
+
+    to_extract: list[tuple[int, int, str, str]] = []  # (start, end, heading_text, ref_file)
+    for i, m in enumerate(headings):
+        heading_text = m.group().lstrip("# ").strip()
+        if not _REFERENCE_TIER_RE.search(heading_text):
+            continue
+        end = headings[i + 1].start() if i + 1 < len(headings) else len(body)
+        section_body = body[m.end():end].strip()
+        if re.match(r"^>\s+See\s+`references/", section_body):
+            continue  # already a pointer — idempotency guard
+        ref_file = _heading_to_reffile(heading_text)
+        to_extract.append((m.start(), end, heading_text, ref_file))
+
+    if not to_extract:
+        return
+
+    refs_dir = skill_dir / "references"
+    refs_dir.mkdir(exist_ok=True)
+
+    # Group by target file and append
+    by_file: dict[str, list[str]] = defaultdict(list)
+    for start, end, _, ref_file in to_extract:
+        by_file[ref_file].append(body[start:end].strip())
+
+    for ref_file, sections in by_file.items():
+        target = refs_dir / f"{ref_file}.md"
+        title = ref_file.replace("-", " ").title()
+        existing = target.read_text(encoding="utf-8") if target.is_file() else f"# {title}\n"
+        additions = "\n".join(f"\n---\n\n{s}" for s in sections)
+        target.write_text(existing.rstrip() + additions + "\n", encoding="utf-8")
+
+    # Replace in SKILL.md with pointers (reverse order to preserve offsets)
+    new_body = body
+    for start, end, heading_text, ref_file in reversed(to_extract):
+        pointer = f"## {heading_text}\n\n> See `references/{ref_file}.md`.\n\n"
+        new_body = new_body[:start] + pointer + new_body[end:]
+
+    skill_md.write_text(frontmatter + new_body, encoding="utf-8")
+
+
+@_fixer(14)
+def fix_progressive_disclosure(skill_dir: Path, result: LintResult) -> None:
+    skill_md = skill_dir / "SKILL.md"
+    text = skill_md.read_text(encoding="utf-8")
+
+    fm_match = re.match(r"^---\s*\n.*?\n---\s*\n?", text, re.DOTALL)
+    body_start = fm_match.end() if fm_match else 0
+    frontmatter = text[:body_start]
+    body = text[body_start:]
+
+    headings = list(re.finditer(r"^## .+", body, re.MULTILINE))
+    to_extract: list[tuple[int, int, str]] = []  # (start, end, heading_text)
+    for i, m in enumerate(headings):
+        end = headings[i + 1].start() if i + 1 < len(headings) else len(body)
+        section = body[m.start():end]
+        if re.search(r"^`{4,}", section, re.MULTILINE):
+            to_extract.append((m.start(), end, m.group().lstrip("# ").strip()))
+
+    if not to_extract:
+        return
+
+    # Append extracted sections to references/fix-templates.md
+    refs_dir = skill_dir / "references"
+    refs_dir.mkdir(exist_ok=True)
+    tmpl_path = refs_dir / "fix-templates.md"
+    existing = tmpl_path.read_text(encoding="utf-8") if tmpl_path.is_file() else "# Fix Templates\n"
+    additions = "\n".join(
+        f"\n---\n\n{body[start:end].strip()}"
+        for start, end, _ in to_extract
+    )
+    tmpl_path.write_text(existing.rstrip() + additions + "\n", encoding="utf-8")
+
+    # Replace extracted sections with pointers (process in reverse to preserve offsets)
+    new_body = body
+    for start, end, heading_text in reversed(to_extract):
+        pointer = f"## {heading_text}\n\n> See `references/fix-templates.md`.\n\n"
+        new_body = new_body[:start] + pointer + new_body[end:]
+
+    skill_md.write_text(frontmatter + new_body, encoding="utf-8")
 
 
 @_fixer(7)
