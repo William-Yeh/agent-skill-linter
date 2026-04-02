@@ -6,6 +6,7 @@ import shutil
 from pathlib import Path
 
 import pytest
+import yaml
 
 from agent_skill_linter.linter import lint_skill
 from agent_skill_linter.models import Severity
@@ -279,6 +280,55 @@ class TestRule12:
             "---\nname: condition-based-waiting\ndescription: Use when tests are flaky.\n---\n\n# Body\n"
         )
         results = rules.check_cso_name(tmp_path)
+        assert results == []
+
+
+# ---------------------------------------------------------------------------
+# Rule 18: CSO description conciseness
+# ---------------------------------------------------------------------------
+
+
+class TestRule18:
+    def _make_skill(self, tmp_path: Path, description: str) -> Path:
+        fm = yaml.safe_dump({"name": "t", "description": description}, default_flow_style=False)
+        (tmp_path / "SKILL.md").write_text(f"---\n{fm}---\n\n# Body\n", encoding="utf-8")
+        return tmp_path
+
+    def test_single_clause_passes(self, tmp_path):
+        self._make_skill(tmp_path, "Use when validating a skill for publishing readiness.")
+        assert rules.check_cso_description_conciseness(tmp_path) == []
+
+    def test_triggers_on_label_flagged(self, tmp_path):
+        self._make_skill(tmp_path, "Use when linting a skill. Triggers on: missing LICENSE, no CI.")
+        results = rules.check_cso_description_conciseness(tmp_path)
+        assert len(results) == 1
+        assert results[0].rule_id == 18
+        assert results[0].severity == Severity.WARNING
+
+    def test_use_cases_label_flagged(self, tmp_path):
+        self._make_skill(tmp_path, "Use when processing data. Use cases: CSV, JSON, XML.")
+        results = rules.check_cso_description_conciseness(tmp_path)
+        assert len(results) == 1
+
+    def test_checks_label_flagged(self, tmp_path):
+        self._make_skill(tmp_path, "Use when reviewing code. Checks: style, tests, security.")
+        results = rules.check_cso_description_conciseness(tmp_path)
+        assert len(results) == 1
+
+    def test_multi_sentence_flagged(self, tmp_path):
+        self._make_skill(tmp_path, "Use when linting a skill. It checks many things. Very useful.")
+        results = rules.check_cso_description_conciseness(tmp_path)
+        assert len(results) == 1
+        assert "3 sentences" in results[0].message
+
+    def test_two_sentences_flagged(self, tmp_path):
+        self._make_skill(tmp_path, "Use when linting. It is helpful.")
+        results = rules.check_cso_description_conciseness(tmp_path)
+        assert len(results) == 1
+        assert "2 sentences" in results[0].message
+
+    def test_valid_skill_passes(self):
+        results = rules.check_cso_description_conciseness(FIXTURES / "valid-skill")
         assert results == []
 
 
@@ -755,3 +805,77 @@ def test_rule16_once_heading_detected(tmp_path):
     results = rules.check_step_conditional_sections(skill_dir)
     assert len(results) == 1
     assert "Once complete" in results[0].message
+
+
+# ---------------------------------------------------------------------------
+# Rule 17: Skill isolation
+# ---------------------------------------------------------------------------
+
+class TestRule17:
+    def _make_skill(self, path: Path) -> None:
+        (path / "SKILL.md").write_text(
+            "---\nname: t\ndescription: Use when.\n---\n\n# T\n",
+            encoding="utf-8",
+        )
+
+    def test_no_git_no_flag(self, tmp_path):
+        """Skill not at repo root — rule should not fire."""
+        self._make_skill(tmp_path)
+        results = rules.check_skill_isolation(tmp_path)
+        assert results == []
+
+    def test_git_no_artifacts_no_flag(self, tmp_path):
+        """Repo root with no non-skill artifacts — should not flag."""
+        (tmp_path / ".git").mkdir()
+        self._make_skill(tmp_path)
+        results = rules.check_skill_isolation(tmp_path)
+        assert results == []
+
+    def test_flags_human_artifacts(self, tmp_path):
+        """README and LICENSE at repo root should trigger the rule."""
+        (tmp_path / ".git").mkdir()
+        self._make_skill(tmp_path)
+        (tmp_path / "README.md").write_text("# hi", encoding="utf-8")
+        (tmp_path / "LICENSE").write_text("MIT", encoding="utf-8")
+        results = rules.check_skill_isolation(tmp_path)
+        assert len(results) == 1
+        assert "README.md" in results[0].message
+        assert "LICENSE" in results[0].message
+
+    def test_flags_dev_artifacts(self, tmp_path):
+        """pyproject.toml and src/ at repo root should trigger the rule."""
+        (tmp_path / ".git").mkdir()
+        self._make_skill(tmp_path)
+        (tmp_path / "pyproject.toml").write_text("[project]", encoding="utf-8")
+        (tmp_path / "src").mkdir()
+        results = rules.check_skill_isolation(tmp_path)
+        assert len(results) == 1
+        assert "pyproject.toml" in results[0].message
+        assert "src/" in results[0].message
+
+    def test_flags_lock_file(self, tmp_path):
+        """Any *.lock file at repo root should trigger the rule."""
+        (tmp_path / ".git").mkdir()
+        self._make_skill(tmp_path)
+        (tmp_path / "uv.lock").write_text("", encoding="utf-8")
+        results = rules.check_skill_isolation(tmp_path)
+        assert len(results) == 1
+        assert "uv.lock" in results[0].message
+
+    def test_message_mentions_skill_dirs(self, tmp_path):
+        """Message should tell users to also move references/, scripts/, assets/."""
+        (tmp_path / ".git").mkdir()
+        self._make_skill(tmp_path)
+        (tmp_path / "README.md").write_text("# hi", encoding="utf-8")
+        results = rules.check_skill_isolation(tmp_path)
+        assert "references/" in results[0].message
+        assert "scripts/" in results[0].message
+        assert "assets/" in results[0].message
+
+    def test_severity_is_info(self, tmp_path):
+        (tmp_path / ".git").mkdir()
+        self._make_skill(tmp_path)
+        (tmp_path / "README.md").write_text("# hi", encoding="utf-8")
+        results = rules.check_skill_isolation(tmp_path)
+        assert results[0].severity == Severity.INFO
+        assert results[0].fixable is False

@@ -22,6 +22,22 @@ def _read_text(path: Path) -> str | None:
     return None
 
 
+def _repo_root(skill_dir: Path) -> Path:
+    """Return the repo root if skill_dir is a direct subdirectory of one; else skill_dir."""
+    parent = skill_dir.parent
+    if (parent / ".git").exists():
+        return parent
+    return skill_dir
+
+
+def _repo_path(skill_dir: Path, name: str) -> Path:
+    """Return path to a repo-level file or dir, preferring skill_dir then repo root."""
+    candidate = skill_dir / name
+    if candidate.exists():
+        return candidate
+    return _repo_root(skill_dir) / name
+
+
 def _parse_frontmatter(text: str) -> dict:
     """Extract YAML frontmatter from markdown text."""
     match = re.match(r"^---\s*\n(.*?)\n---", text, re.DOTALL)
@@ -58,8 +74,27 @@ def _extract_section_content(text: str, heading_pattern: str) -> str | None:
 
 def check_spec_compliance(skill_dir: Path) -> list[LintResult]:
     from skills_ref import validate
+    from skills_ref.validator import validate_metadata
+    from skills_ref.parser import find_skill_md, parse_frontmatter
+    from skills_ref.errors import ParseError
 
-    errors = validate(skill_dir)
+    # When skill_dir is a subdir (not the repo root), skip the dir-name-match
+    # check: the installed directory name comes from SKILL.md 'name', not the
+    # source directory name.
+    if (skill_dir / ".git").exists():
+        errors = validate(skill_dir)
+    else:
+        skill_md = find_skill_md(skill_dir)
+        if skill_md is None:
+            errors = ["Missing required file: SKILL.md"]
+        else:
+            try:
+                content = skill_md.read_text(encoding="utf-8")
+                metadata, _ = parse_frontmatter(content)
+                errors = validate_metadata(metadata, skill_dir=None)
+            except ParseError as e:
+                errors = [str(e)]
+
     return [
         LintResult(
             rule_id=1,
@@ -81,7 +116,7 @@ _MIT_MARKER = "MIT License"
 
 def check_license(skill_dir: Path) -> list[LintResult]:
     results: list[LintResult] = []
-    lic = _read_text(skill_dir / "LICENSE")
+    lic = _read_text(_repo_path(skill_dir, "LICENSE"))
 
     if lic is None:
         results.append(LintResult(
@@ -150,7 +185,7 @@ _BADGE_PATTERNS = [
 
 
 def check_readme_badges(skill_dir: Path) -> list[LintResult]:
-    text = _read_text(skill_dir / "README.md")
+    text = _read_text(_repo_path(skill_dir, "README.md"))
     if text is None:
         return [LintResult(
             rule_id=4,
@@ -178,7 +213,7 @@ def check_readme_badges(skill_dir: Path) -> list[LintResult]:
 # ---------------------------------------------------------------------------
 
 def check_ci_workflow(skill_dir: Path) -> list[LintResult]:
-    wf_dir = skill_dir / ".github" / "workflows"
+    wf_dir = _repo_path(skill_dir, ".github") / "workflows"
     if not wf_dir.is_dir():
         return [LintResult(
             rule_id=5,
@@ -205,7 +240,7 @@ def check_ci_workflow(skill_dir: Path) -> list[LintResult]:
 # ---------------------------------------------------------------------------
 
 def check_installation_section(skill_dir: Path) -> list[LintResult]:
-    text = _read_text(skill_dir / "README.md")
+    text = _read_text(_repo_path(skill_dir, "README.md"))
     if text is None:
         return []  # Rule 4 already flags missing README
 
@@ -228,7 +263,7 @@ _USAGE_HEADING = r"^#{1,3}\s+.*[Uu]sage"
 
 
 def check_usage_section(skill_dir: Path) -> list[LintResult]:
-    text = _read_text(skill_dir / "README.md")
+    text = _read_text(_repo_path(skill_dir, "README.md"))
     if text is None:
         return []  # Rule 4 already flags missing README
 
@@ -275,7 +310,7 @@ _DEDUP_THRESHOLD = 0.5  # warn if >50% of SKILL.md body lines also appear in REA
 
 def check_content_dedup(skill_dir: Path) -> list[LintResult]:
     skill_text = _read_text(skill_dir / "SKILL.md")
-    readme_text = _read_text(skill_dir / "README.md")
+    readme_text = _read_text(_repo_path(skill_dir, "README.md"))
     if skill_text is None or readme_text is None:
         return []
 
@@ -336,6 +371,7 @@ _STANDARD_DIRS = {
     "scripts", "references", "assets",
     ".github", ".git", ".venv", "__pycache__",
     "src", "tests", "test", "node_modules",
+    "skill", "skills",
 }
 
 
@@ -378,6 +414,56 @@ def check_cso_description(skill_dir: Path) -> list[LintResult]:
             ),
             file="SKILL.md",
         )]
+    return []
+
+
+# ---------------------------------------------------------------------------
+# Rule 18: CSO — description should be a single routing clause
+# ---------------------------------------------------------------------------
+
+# Labels that signal the description has been extended with elaboration lists
+_ELABORATION_LABELS = re.compile(
+    r"\b(?:triggers?\s+on|use\s+cases?|examples?|checks?|includes?|handles?|"
+    r"supports?|features?|covers?|also|note)\s*:",
+    re.IGNORECASE,
+)
+
+
+def check_cso_description_conciseness(skill_dir: Path) -> list[LintResult]:
+    text = _read_text(skill_dir / "SKILL.md")
+    if text is None:
+        return []
+
+    fm = _parse_frontmatter(text)
+    description = str(fm.get("description", "")).strip()
+    if not description:
+        return []
+
+    if m := _ELABORATION_LABELS.search(description):
+        return [LintResult(
+            rule_id=18,
+            severity=Severity.WARNING,
+            message=(
+                "SKILL.md description contains elaboration labels "
+                f"({m.group().strip()}). "
+                "Keep the description to a single routing clause; move detail into the skill body."
+            ),
+            file="SKILL.md",
+        )]
+
+    # Flag multi-sentence descriptions (sentence = ends with . ? ! followed by space or end)
+    sentences = [s for s in re.split(r"(?<=[.?!])\s+", description.strip()) if s]
+    if len(sentences) > 1:
+        return [LintResult(
+            rule_id=18,
+            severity=Severity.WARNING,
+            message=(
+                f"SKILL.md description has {len(sentences)} sentences. "
+                "Keep the description to a single routing clause; move detail into the skill body."
+            ),
+            file="SKILL.md",
+        )]
+
     return []
 
 
@@ -629,3 +715,62 @@ def check_python_invocations(skill_dir: Path) -> list[LintResult]:
                 ))
 
     return results
+
+
+# ---------------------------------------------------------------------------
+# Rule 17: Skill isolation — skill files mixed with non-skill artifacts at repo root
+# ---------------------------------------------------------------------------
+
+_NON_SKILL_FILES = {
+    # human-facing docs
+    "README.md", "README.rst", "README.txt", "README",
+    "LICENSE", "LICENSE.md", "LICENSE.txt",
+    "CHANGELOG.md", "CHANGELOG.rst", "CHANGELOG", "CHANGES.md", "HISTORY.md",
+    "DESIGN.md", "DESIGN", "CONTRIBUTING.md", "CONTRIBUTING",
+    "CODE_OF_CONDUCT.md", "SECURITY.md",
+    # build / package manifests
+    "pyproject.toml", "setup.py", "setup.cfg",
+    "package.json", "package-lock.json", "yarn.lock",
+    "Cargo.toml", "Cargo.lock",
+    "go.mod", "go.sum",
+    "Makefile", "CMakeLists.txt",
+}
+
+_NON_SKILL_DIRS = {"src", "tests", "test", "node_modules", "dist", "build"}
+
+
+def check_skill_isolation(skill_dir: Path) -> list[LintResult]:
+    """Rule 17: skill files should be isolated from non-skill artifacts.
+
+    When SKILL.md lives at the repo root, `npx skills add` installs the entire
+    directory — including READMEs, LICENSE, test suites, and build artifacts
+    that agents never need. Moving SKILL.md (and references/) into a skill/
+    subdirectory limits installation to only what agents require.
+    """
+    if not (skill_dir / ".git").exists():
+        return []  # not a repo root — already isolated or being tested directly
+
+    found: list[str] = []
+    for entry in sorted(skill_dir.iterdir()):
+        name = entry.name
+        if entry.is_dir() and name in _NON_SKILL_DIRS:
+            found.append(f"{name}/")
+        elif entry.is_file() and (
+            name in _NON_SKILL_FILES
+            or name.endswith(".lock")
+        ):
+            found.append(name)
+
+    if not found:
+        return []
+
+    return [LintResult(
+        rule_id=17,
+        severity=Severity.INFO,
+        message=(
+            f"SKILL.md is at repo root alongside non-skill artifacts: "
+            f"{', '.join(found)}. "
+            "Move SKILL.md and skill-owned directories (references/, scripts/, assets/) "
+            "into a skill/ subdirectory so `npx skills add` installs only what agents need."
+        ),
+    )]

@@ -12,7 +12,7 @@ import click
 import yaml
 
 from agent_skill_linter.models import LintResult
-from agent_skill_linter.rules import _REFERENCE_TIER_RE
+from agent_skill_linter.rules import _REFERENCE_TIER_RE, _repo_path
 
 # ---------------------------------------------------------------------------
 # Dispatcher
@@ -123,7 +123,7 @@ SOFTWARE.
 
 @_fixer(2)
 def fix_license(skill_dir: Path, result: LintResult) -> None:
-    lic_path = skill_dir / "LICENSE"
+    lic_path = _repo_path(skill_dir, "LICENSE")
     year = str(datetime.now().year)
 
     if lic_path.is_file():
@@ -183,7 +183,7 @@ _BADGE_BLOCK = """\
 
 @_fixer(4)
 def fix_badges(skill_dir: Path, result: LintResult) -> None:
-    readme_path = skill_dir / "README.md"
+    readme_path = _repo_path(skill_dir, "README.md")
     remote = _detect_github_remote(skill_dir)
 
     if remote:
@@ -240,7 +240,7 @@ jobs:
 
 @_fixer(5)
 def fix_ci_workflow(skill_dir: Path, result: LintResult) -> None:
-    wf_dir = skill_dir / ".github" / "workflows"
+    wf_dir = _repo_path(skill_dir, ".github") / "workflows"
     wf_dir.mkdir(parents=True, exist_ok=True)
     ci_path = wf_dir / "ci.yml"
     if not ci_path.exists():
@@ -277,7 +277,7 @@ Copy the skill directory to your agent's skill folder:
 
 @_fixer(6)
 def fix_installation_section(skill_dir: Path, result: LintResult) -> None:
-    readme_path = skill_dir / "README.md"
+    readme_path = _repo_path(skill_dir, "README.md")
     if not readme_path.is_file():
         return
 
@@ -425,7 +425,7 @@ def fix_progressive_disclosure(skill_dir: Path, result: LintResult) -> None:
 
 @_fixer(7)
 def fix_usage_section(skill_dir: Path, result: LintResult) -> None:
-    readme_path = skill_dir / "README.md"
+    readme_path = _repo_path(skill_dir, "README.md")
     if not readme_path.is_file():
         return
 

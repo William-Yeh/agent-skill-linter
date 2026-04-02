@@ -27,10 +27,12 @@ def lint_skill(path: str | Path) -> list[LintResult]:
         rules.check_nonstandard_dirs,
         rules.check_cso_description,
         rules.check_cso_name,
+        rules.check_cso_description_conciseness,
         rules.check_python_invocations,
         rules.check_progressive_disclosure,
         rules.check_semantic_sections,
         rules.check_step_conditional_sections,
+        rules.check_skill_isolation,
     ]
     for fn in rule_fns:
         results.extend(fn(skill_dir))

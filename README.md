@@ -16,16 +16,16 @@ npx skills add William-Yeh/agent-skill-linter
 
 ### Manual installation
 
-Copy the skill directory to your agent's skill folder:
+Copy the `skill/` directory to your agent's skill folder as `agent-skill-linter`:
 
 | Agent | Directory |
 |-------|-----------|
-| Claude Code | `~/.claude/skills/` |
-| Cursor | `.cursor/skills/` |
-| Gemini CLI | `.gemini/skills/` |
-| Amp | `.amp/skills/` |
-| Roo Code | `.roo/skills/` |
-| Copilot | `.github/skills/` |
+| Claude Code | `~/.claude/skills/agent-skill-linter/` |
+| Cursor | `.cursor/skills/agent-skill-linter/` |
+| Gemini CLI | `.gemini/skills/agent-skill-linter/` |
+| Amp | `.amp/skills/agent-skill-linter/` |
+| Roo Code | `.roo/skills/agent-skill-linter/` |
+| Copilot | `.github/skills/agent-skill-linter/` |
 
 ### As a CLI tool
 
@@ -59,7 +59,7 @@ Exit code: 1 if errors, 0 otherwise.
 | # | Rule | Severity | Fixable |
 |---|------|----------|---------|
 | 1 | SKILL.md spec compliance (via skills-ref) | Error | No |
-| 2 | LICENSE exists, Apache-2.0 or MIT, current year | Warning | Yes |
+| 2 | LICENSE exists, Apache-2.0 or MIT, current year | Warning | Partial |
 | 3 | `metadata.author` in SKILL.md frontmatter | Warning | Yes |
 | 4 | README badges (CI, license, Agent Skills) | Warning | Yes |
 | 5 | `.github/workflows/` has CI workflow | Warning | Yes |
@@ -76,3 +76,5 @@ Exit code: 1 if errors, 0 otherwise.
 | 14 | Progressive disclosure: embedded templates (4-backtick fences) → `references/` | Warning | Yes |
 | 15 | Progressive disclosure: reference-tier section headings (Troubleshooting, FAQ, Advanced…) → `references/` | Warning | Yes |
 | 16 | Progressive disclosure: heavy step-conditional sections (>30 lines) → `references/` | Info | No |
+| 17 | Skill isolation: SKILL.md at repo root alongside non-skill artifacts (README, LICENSE, src/, tests/, …) | Info | No |
+| 18 | CSO: description is a single routing clause (no elaboration labels or multiple sentences) | Warning | No |
