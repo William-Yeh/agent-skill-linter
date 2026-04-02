@@ -33,6 +33,7 @@ def lint_skill(path: str | Path) -> list[LintResult]:
         rules.check_semantic_sections,
         rules.check_step_conditional_sections,
         rules.check_skill_isolation,
+        rules.check_readme_tier_in_skill,
     ]
     for fn in rule_fns:
         results.extend(fn(skill_dir))

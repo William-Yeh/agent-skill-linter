@@ -739,6 +739,49 @@ _NON_SKILL_FILES = {
 _NON_SKILL_DIRS = {"src", "tests", "test", "node_modules", "dist", "build"}
 
 
+# ---------------------------------------------------------------------------
+# Rule 19: Division of labor — README-tier sections in SKILL.md
+# ---------------------------------------------------------------------------
+
+# Anchored at start so "## Input Requirements" doesn't fire — only headings
+# that *lead* with a README-tier keyword are flagged (e.g. "## Requirements").
+# Note: "changelog" overlaps with _REFERENCE_TIER_RE (Rule 15); both rules fire
+# for a Changelog section, but with different advice (README vs references/).
+_README_TIER_RE = re.compile(
+    r"^(install(?:ation)?|set[\s-]?up|getting[\s-]started|quick[\s-]?start|"
+    r"prerequisites?|requirements?|features?|changelog|release[\s-]notes?)\b",
+    re.IGNORECASE,
+)
+
+
+def check_readme_tier_in_skill(skill_dir: Path) -> list[LintResult]:
+    """Rule 19: SKILL.md should not contain sections that belong in README."""
+    text = _read_text(skill_dir / "SKILL.md")
+    if text is None:
+        return []
+
+    body = _body_after_frontmatter(text)
+    flagged = []
+    for m in re.finditer(r"^## .+", body, re.MULTILINE):
+        heading_text = m.group().lstrip("# ").strip()
+        if _README_TIER_RE.match(heading_text):
+            flagged.append(heading_text)
+
+    if not flagged:
+        return []
+
+    names = ", ".join(f'"{s}"' for s in flagged)
+    return [LintResult(
+        rule_id=19,
+        severity=Severity.WARNING,
+        message=(
+            f"SKILL.md contains README-tier sections: {names}. "
+            "These are human-facing — move to README.md to keep SKILL.md focused on agent workflow."
+        ),
+        file="SKILL.md",
+    )]
+
+
 def check_skill_isolation(skill_dir: Path) -> list[LintResult]:
     """Rule 17: skill files should be isolated from non-skill artifacts.
 

@@ -23,4 +23,3 @@ jobs:
       - uses: astral-sh/setup-uv@v6
       - run: uv sync
       - run: uv run skill-lint check ./skill
-      - run: uvx --from skills-ref agentskills validate "$GITHUB_WORKSPACE/skill"

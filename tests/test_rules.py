@@ -879,3 +879,111 @@ class TestRule17:
         results = rules.check_skill_isolation(tmp_path)
         assert results[0].severity == Severity.INFO
         assert results[0].fixable is False
+
+
+# ---------------------------------------------------------------------------
+# Rule 19: README-tier sections in SKILL.md
+# ---------------------------------------------------------------------------
+
+
+class TestRule19:
+    def _make_skill(self, tmp_path: Path, extra_sections: str) -> None:
+        (tmp_path / "SKILL.md").write_text(
+            f"---\nname: t\ndescription: Use when.\nmetadata:\n  author: T\n---\n\n"
+            f"## Triage\n\nDo the thing.\n\n{extra_sections}",
+            encoding="utf-8",
+        )
+
+    def test_installation_flagged(self, tmp_path):
+        self._make_skill(tmp_path, "## Installation\n\nnpx skills add foo\n")
+        results = rules.check_readme_tier_in_skill(tmp_path)
+        assert len(results) == 1
+        assert results[0].rule_id == 19
+        assert results[0].severity == Severity.WARNING
+        assert "Installation" in results[0].message
+
+    def test_features_flagged(self, tmp_path):
+        self._make_skill(tmp_path, "## Features\n\n- feature 1\n")
+        results = rules.check_readme_tier_in_skill(tmp_path)
+        assert len(results) == 1
+
+    def test_getting_started_flagged(self, tmp_path):
+        self._make_skill(tmp_path, "## Getting Started\n\nRun X first.\n")
+        results = rules.check_readme_tier_in_skill(tmp_path)
+        assert len(results) == 1
+        assert "Getting Started" in results[0].message
+
+    def test_prerequisites_flagged(self, tmp_path):
+        self._make_skill(tmp_path, "## Prerequisites\n\nNeed Python 3.12.\n")
+        results = rules.check_readme_tier_in_skill(tmp_path)
+        assert len(results) == 1
+
+    def test_quick_start_flagged(self, tmp_path):
+        self._make_skill(tmp_path, "## Quick Start\n\nRun the tool.\n")
+        results = rules.check_readme_tier_in_skill(tmp_path)
+        assert len(results) == 1
+
+    def test_changelog_flagged(self, tmp_path):
+        self._make_skill(tmp_path, "## Changelog\n\n- v1.0 release\n")
+        results = rules.check_readme_tier_in_skill(tmp_path)
+        assert len(results) == 1
+
+    def test_requirements_flagged(self, tmp_path):
+        self._make_skill(tmp_path, "## Requirements\n\nPython 3.12+.\n")
+        results = rules.check_readme_tier_in_skill(tmp_path)
+        assert len(results) == 1
+
+    def test_overview_not_flagged(self, tmp_path):
+        self._make_skill(tmp_path, "## Overview\n\nBrief context.\n")
+        results = rules.check_readme_tier_in_skill(tmp_path)
+        assert results == []
+
+    def test_introduction_not_flagged(self, tmp_path):
+        self._make_skill(tmp_path, "## Introduction\n\nContext here.\n")
+        results = rules.check_readme_tier_in_skill(tmp_path)
+        assert results == []
+
+    def test_setup_flagged(self, tmp_path):
+        self._make_skill(tmp_path, "## Setup\n\nConfigure env vars.\n")
+        results = rules.check_readme_tier_in_skill(tmp_path)
+        assert len(results) == 1
+
+    def test_release_notes_flagged(self, tmp_path):
+        self._make_skill(tmp_path, "## Release Notes\n\n- v1.1 added X\n")
+        results = rules.check_readme_tier_in_skill(tmp_path)
+        assert len(results) == 1
+
+    def test_uninstall_not_flagged(self, tmp_path):
+        # "Uninstall" must not match because keyword is not at heading start
+        self._make_skill(tmp_path, "## Uninstall old version\n\nRemove cache.\n")
+        results = rules.check_readme_tier_in_skill(tmp_path)
+        assert results == []
+
+    def test_compound_heading_not_flagged(self, tmp_path):
+        # "Input Requirements" — keyword is not at start, must not fire
+        self._make_skill(tmp_path, "## Input Requirements\n\nContext.\n")
+        results = rules.check_readme_tier_in_skill(tmp_path)
+        assert results == []
+
+    def test_feature_flags_flagged(self, tmp_path):
+        # "Feature Flags" leads with a README-tier keyword — should fire
+        self._make_skill(tmp_path, "## Feature Flags\n\nContext.\n")
+        results = rules.check_readme_tier_in_skill(tmp_path)
+        assert len(results) == 1
+
+    def test_h3_not_flagged(self, tmp_path):
+        # Only H2 headings are scanned, consistent with Rules 15/16
+        self._make_skill(tmp_path, "## How to Use\n\n### Installation\n\nSub-step.\n")
+        results = rules.check_readme_tier_in_skill(tmp_path)
+        assert results == []
+
+    def test_multiple_violations_single_result(self, tmp_path):
+        self._make_skill(tmp_path, "## Installation\n\nfoo\n\n## Features\n\nbar\n")
+        results = rules.check_readme_tier_in_skill(tmp_path)
+        assert len(results) == 1
+        assert "Installation" in results[0].message
+        assert "Features" in results[0].message
+
+    def test_valid_skill_passes(self):
+        results = rules.check_readme_tier_in_skill(FIXTURES / "valid-skill")
+        assert results == []

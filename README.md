@@ -78,3 +78,4 @@ Exit code: 1 if errors, 0 otherwise.
 | 16 | Progressive disclosure: heavy step-conditional sections (>30 lines) → `references/` | Info | No |
 | 17 | Skill isolation: SKILL.md at repo root alongside non-skill artifacts (README, LICENSE, src/, tests/, …) | Info | No |
 | 18 | CSO: description is a single routing clause (no elaboration labels or multiple sentences) | Warning | No |
+| 19 | Division of labor: README-tier sections (Installation, Features, Getting Started…) in SKILL.md | Warning | No |

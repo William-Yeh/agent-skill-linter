@@ -1,6 +1,6 @@
 [project]
 name = "agent-skill-linter"
-version = "0.7.0"
+version = "0.9.0"
 description = "Lint agent skills for spec compliance and publishing readiness"
 readme = "README.md"
 authors = [

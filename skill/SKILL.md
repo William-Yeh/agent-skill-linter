@@ -5,7 +5,7 @@ description: >
 metadata:
   author: William Yeh <william.pjyeh@gmail.com>
   license: Apache-2.0
-  version: 0.8.0
+  version: 0.9.0
 ---
 
 # Agent Skill Linter
@@ -36,7 +36,7 @@ For fixable rules without CLI, use the templates in `references/fix-templates.md
 
 ### Step 4 — Resolve remaining Warnings manually
 
-CSO naming (Rules 11–12), Python invocations (Rule 13), description conciseness (Rule 18) — see the rule table below.
+CSO naming (Rules 11–12), Python invocations (Rule 13), description conciseness (Rule 18), README-tier sections in SKILL.md (Rule 19) — see the rule table below.
 
 ### Step 5 — Semantic review: description
 
@@ -98,6 +98,7 @@ Content dedup (Rule 8), body length (Rule 9), non-standard dirs (Rule 10), skill
 | 16 | Progressive disclosure: heavy step sections (>30 lines) → `references/` | Info | Step 8 |
 | 17 | Skill isolation: SKILL.md at repo root alongside non-skill artifacts | Info | — |
 | 18 | CSO: description is a single routing clause (no elaboration labels or multiple sentences) | Warning | Step 5 |
+| 19 | Division of labor: README-tier sections (Installation, Features, Getting Started…) in SKILL.md | Warning | — |
 
 ## CLI Reference
 
