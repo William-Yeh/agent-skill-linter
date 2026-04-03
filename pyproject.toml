@@ -1,31 +1,19 @@
 [project]
-name = "agent-skill-linter"
-version = "0.9.0"
-description = "Lint agent skills for spec compliance and publishing readiness"
-readme = "README.md"
-authors = [
-    { name = "William Yeh", email = "william.pjyeh@gmail.com" }
-]
+name = "dev"
+version = "0"
 requires-python = ">=3.12"
-license = "Apache-2.0"
-dependencies = [
-    "skills-ref",
-    "click",
-    "pyyaml",
-    "rich",
-]
-
-[project.scripts]
-skill-lint = "agent_skill_linter.cli:main"
-
-[build-system]
-requires = ["uv_build>=0.10.2,<0.11.0"]
-build-backend = "uv_build"
 
 [dependency-groups]
 dev = [
     "pytest",
     "ruff",
+    # Runtime deps of skill/scripts/skill-lint.py — listed here for local dev
+    # convenience (uv run pytest). The script declares them via PEP 723 inline
+    # metadata for standalone use.
+    "skills-ref",
+    "click",
+    "pyyaml",
+    "rich",
 ]
 
 [tool.ruff]

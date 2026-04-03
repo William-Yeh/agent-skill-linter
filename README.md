@@ -27,12 +27,6 @@ Copy the `skill/` directory to your agent's skill folder as `agent-skill-linter`
 | Roo Code | `.roo/skills/agent-skill-linter/` |
 | Copilot | `.github/skills/agent-skill-linter/` |
 
-### As a CLI tool
-
-```bash
-uv tool install git+https://github.com/William-Yeh/agent-skill-linter
-```
-
 ## Usage
 
 After installing, try these prompts with your agent:
@@ -43,16 +37,16 @@ After installing, try these prompts with your agent:
 
 ### CLI
 
-You can also run the script directly:
+Run the script directly from the installed skill directory:
 
 ```bash
-skill-lint check ./my-skill          # Lint a skill directory
-skill-lint check .                    # Lint repo-root skill
-skill-lint check ./my-skill --fix    # Auto-fix fixable issues
-skill-lint check ./my-skill --format json  # JSON output for CI
+./scripts/skill-lint.py check ./my-skill          # Lint a skill directory
+./scripts/skill-lint.py check .                    # Lint repo-root skill
+./scripts/skill-lint.py check ./my-skill --fix    # Auto-fix fixable issues
+./scripts/skill-lint.py check ./my-skill --format json  # JSON output for CI
 ```
 
-Exit code: 1 if errors, 0 otherwise.
+Requires [uv](https://docs.astral.sh/uv/). Exit code: 1 if errors, 0 otherwise.
 
 ## Lint Rules
 
@@ -67,15 +61,15 @@ Exit code: 1 if errors, 0 otherwise.
 | 7 | README has Usage section | Warning | Yes |
 | 7.1 | README Usage section has starter prompt examples | Warning | No |
 | 7.2 | README Usage section has CLI usage subsection | Info | No |
-| 8 | Content dedup between README.md and SKILL.md | Info | No |
 | 9 | SKILL.md body < 500 lines | Info | No |
 | 10 | Non-standard dirs flagged | Info | No |
 | 11 | CSO: description starts with "Use when..." | Warning | No |
-| 12 | CSO: name is action-oriented (gerund preferred) | Info | No |
 | 13 | Python invocation consistency (`uv run python` in uv projects) | Warning | No |
 | 14 | Progressive disclosure: embedded templates (4-backtick fences) → `references/` | Warning | Yes |
 | 15 | Progressive disclosure: reference-tier section headings (Troubleshooting, FAQ, Advanced…) → `references/` | Warning | Yes |
-| 16 | Progressive disclosure: heavy step-conditional sections (>30 lines) → `references/` | Info | No |
 | 17 | Skill isolation: SKILL.md at repo root alongside non-skill artifacts (README, LICENSE, src/, tests/, …) | Info | No |
-| 18 | CSO: description is a single routing clause (no elaboration labels or multiple sentences) | Warning | No |
 | 19 | Division of labor: README-tier sections (Installation, Features, Getting Started…) in SKILL.md | Warning | No |
+| 20 | Triage workflow has 3+ steps but no semantic review step (e.g. "Ask: does it…") | Info | No |
+| 21 | Python entry-point scripts in `scripts/` lack PEP 723 inline dependency metadata | Warning | No |
+
+Rules 8, 12, 16, and 18 were intentionally removed from automated checking — their mechanical proxies produced unreliable results. Equivalent guidance lives in the agent triage workflow (SKILL.md Steps 5–8) and `references/semantic-rules.md`.

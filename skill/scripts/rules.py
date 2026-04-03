@@ -9,7 +9,7 @@ from pathlib import Path
 
 import yaml
 
-from agent_skill_linter.models import LintResult, Severity
+from models import LintResult, Severity
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -301,40 +301,6 @@ def check_usage_section(skill_dir: Path) -> list[LintResult]:
     return results
 
 
-# ---------------------------------------------------------------------------
-# Rule 8: Content dedup between README.md and SKILL.md
-# ---------------------------------------------------------------------------
-
-_DEDUP_THRESHOLD = 0.5  # warn if >50% of SKILL.md body lines also appear in README
-
-
-def check_content_dedup(skill_dir: Path) -> list[LintResult]:
-    skill_text = _read_text(skill_dir / "SKILL.md")
-    readme_text = _read_text(_repo_path(skill_dir, "README.md"))
-    if skill_text is None or readme_text is None:
-        return []
-
-    skill_body = _body_after_frontmatter(skill_text)
-    skill_lines = {line.strip() for line in skill_body.splitlines() if len(line.strip()) > 20}
-    if not skill_lines:
-        return []
-
-    readme_set = {line.strip() for line in readme_text.splitlines()}
-    overlap = skill_lines & readme_set
-
-    ratio = len(overlap) / len(skill_lines)
-    if ratio > _DEDUP_THRESHOLD:
-        return [LintResult(
-            rule_id=8,
-            severity=Severity.INFO,
-            message=(
-                f"{len(overlap)}/{len(skill_lines)} non-trivial SKILL.md body lines "
-                f"also appear in README.md ({ratio:.0%} overlap). "
-                "Consider making SKILL.md agent-focused and README.md human-focused."
-            ),
-        )]
-    return []
-
 
 # ---------------------------------------------------------------------------
 # Rule 9: SKILL.md body < 500 lines
@@ -417,82 +383,6 @@ def check_cso_description(skill_dir: Path) -> list[LintResult]:
     return []
 
 
-# ---------------------------------------------------------------------------
-# Rule 18: CSO — description should be a single routing clause
-# ---------------------------------------------------------------------------
-
-# Labels that signal the description has been extended with elaboration lists
-_ELABORATION_LABELS = re.compile(
-    r"\b(?:triggers?\s+on|use\s+cases?|examples?|checks?|includes?|handles?|"
-    r"supports?|features?|covers?|also|note)\s*:",
-    re.IGNORECASE,
-)
-
-
-def check_cso_description_conciseness(skill_dir: Path) -> list[LintResult]:
-    text = _read_text(skill_dir / "SKILL.md")
-    if text is None:
-        return []
-
-    fm = _parse_frontmatter(text)
-    description = str(fm.get("description", "")).strip()
-    if not description:
-        return []
-
-    if m := _ELABORATION_LABELS.search(description):
-        return [LintResult(
-            rule_id=18,
-            severity=Severity.WARNING,
-            message=(
-                "SKILL.md description contains elaboration labels "
-                f"({m.group().strip()}). "
-                "Keep the description to a single routing clause; move detail into the skill body."
-            ),
-            file="SKILL.md",
-        )]
-
-    # Flag multi-sentence descriptions (sentence = ends with . ? ! followed by space or end)
-    sentences = [s for s in re.split(r"(?<=[.?!])\s+", description.strip()) if s]
-    if len(sentences) > 1:
-        return [LintResult(
-            rule_id=18,
-            severity=Severity.WARNING,
-            message=(
-                f"SKILL.md description has {len(sentences)} sentences. "
-                "Keep the description to a single routing clause; move detail into the skill body."
-            ),
-            file="SKILL.md",
-        )]
-
-    return []
-
-
-# ---------------------------------------------------------------------------
-# Rule 12: CSO — name should be action-oriented (gerund preferred)
-# ---------------------------------------------------------------------------
-
-def check_cso_name(skill_dir: Path) -> list[LintResult]:
-    text = _read_text(skill_dir / "SKILL.md")
-    if text is None:
-        return []
-
-    fm = _parse_frontmatter(text)
-    name = str(fm.get("name", "")).strip()
-    if not name:
-        return []
-
-    has_gerund = any(seg.endswith("ing") for seg in name.split("-"))
-    if not has_gerund:
-        return [LintResult(
-            rule_id=12,
-            severity=Severity.INFO,
-            message=(
-                f"SKILL.md name '{name}' may benefit from action-oriented naming "
-                "(CSO: prefer gerunds like 'creating-skills' over noun forms)."
-            ),
-            file="SKILL.md",
-        )]
-    return []
 
 
 # ---------------------------------------------------------------------------
@@ -596,48 +486,6 @@ def check_semantic_sections(skill_dir: Path) -> list[LintResult]:
         file="SKILL.md",
     )]
 
-
-_STEP_HEADING_RE = re.compile(
-    r"^## (?:\d+[\.\)]\s|"
-    r"(?:step|phase|stage)\s+\d+|"
-    r"after\s+|once\s+|if\s+)",
-    re.IGNORECASE,
-)
-_STEP_SECTION_THRESHOLD = 30
-
-
-def check_step_conditional_sections(skill_dir: Path) -> list[LintResult]:
-    """Rule 16: Heavy step-conditional sections in SKILL.md should move to references/."""
-    text = _read_text(skill_dir / "SKILL.md")
-    if text is None:
-        return []
-
-    body = _body_after_frontmatter(text)
-    headings = list(re.finditer(r"^## .+", body, re.MULTILINE))
-
-    heavy = []
-    for i, m in enumerate(headings):
-        if not _STEP_HEADING_RE.match(m.group()):
-            continue
-        end = headings[i + 1].start() if i + 1 < len(headings) else len(body)
-        line_count = len(body[m.start():end].splitlines())
-        if line_count > _STEP_SECTION_THRESHOLD:
-            heavy.append(m.group().lstrip("# ").strip())
-
-    if not heavy:
-        return []
-
-    names = ", ".join(f'"{s}"' for s in heavy)
-    return [LintResult(
-        rule_id=16,
-        severity=Severity.INFO,
-        message=(
-            f"SKILL.md has heavy step-conditional sections: {names} "
-            f"(>{_STEP_SECTION_THRESHOLD} lines). "
-            "Consider moving detail to references/ and leaving a pointer."
-        ),
-        file="SKILL.md",
-    )]
 
 
 def check_progressive_disclosure(skill_dir: Path) -> list[LintResult]:
@@ -779,6 +627,101 @@ def check_readme_tier_in_skill(skill_dir: Path) -> list[LintResult]:
             "These are human-facing — move to README.md to keep SKILL.md focused on agent workflow."
         ),
         file="SKILL.md",
+    )]
+
+
+# ---------------------------------------------------------------------------
+# Rule 20: Triage workflow has no semantic review steps
+# ---------------------------------------------------------------------------
+
+# A triage workflow is present when SKILL.md has 3+ numbered step headings.
+_TRIAGE_STEP_RE = re.compile(r"^###\s+Step\s+\d+", re.MULTILINE | re.IGNORECASE)
+
+# Semantic review steps prompt the agent to apply judgment, not just run a
+# command.  The canonical marker is "ask:" — as in "Read X and ask: does it...".
+# This deliberately excludes steps that only contain code blocks or bullet-point
+# action lists, which are purely mechanical.
+_SEMANTIC_STEP_RE = re.compile(
+    r"\bask\s*:"               # "Ask: ..."  (direct question prompt)
+    r"|\bread\b.{0,80}\band\s+ask\b",  # "Read ... and ask:"
+    re.IGNORECASE | re.DOTALL,
+)
+
+_TRIAGE_STEP_THRESHOLD = 3  # minimum steps before the rule fires
+
+
+def check_triage_semantic_balance(skill_dir: Path) -> list[LintResult]:
+    """Rule 20: A triage workflow should include at least one semantic review step.
+
+    Automated commands cover structural signals; agent judgment is needed for
+    semantic ones.  A workflow composed entirely of CLI commands will silently
+    miss quality issues that no regex can reliably detect — the same failure
+    mode that led to Rules 8, 12, 16, and 18 being removed from this linter.
+    """
+    text = _read_text(skill_dir / "SKILL.md")
+    if text is None:
+        return []
+
+    body = _body_after_frontmatter(text)
+
+    steps = _TRIAGE_STEP_RE.findall(body)
+    if len(steps) < _TRIAGE_STEP_THRESHOLD:
+        return []  # too few steps to constitute a meaningful triage workflow
+
+    if _SEMANTIC_STEP_RE.search(body):
+        return []  # at least one semantic review step present
+
+    return [LintResult(
+        rule_id=20,
+        severity=Severity.INFO,
+        message=(
+            f"SKILL.md has {len(steps)} triage steps but none contain a semantic "
+            "review prompt (e.g. 'Ask: does it…'). "
+            "Automated steps cover structural signals; add at least one step where "
+            "the agent applies judgment for signals that pattern-matching cannot "
+            "reliably detect."
+        ),
+        file="SKILL.md",
+    )]
+
+
+_PEP723_BLOCK_RE = re.compile(r"^# /// script\s*$", re.MULTILINE)
+_SHEBANG_RE = re.compile(r"^#!/")
+
+
+def check_pep723_entry_points(skill_dir: Path) -> list[LintResult]:
+    """Rule 21: Python entry-point scripts in scripts/ should declare deps via PEP 723.
+
+    A shebang identifies a file as an executable entry point (not a module).
+    Entry points that lack a `# /// script` block require a separate install step,
+    making the skill non-self-contained — agents cannot invoke it with a single
+    `uv run` without pre-installing dependencies.
+    """
+    scripts_dir = skill_dir / "scripts"
+    if not scripts_dir.is_dir():
+        return []
+
+    violations: list[str] = []
+    for py_file in sorted(scripts_dir.glob("*.py")):
+        text = _read_text(py_file)
+        if text is None or not _SHEBANG_RE.match(text):
+            continue  # not an entry point — module files have no shebang
+        if not _PEP723_BLOCK_RE.search(text):
+            violations.append(py_file.name)
+
+    if not violations:
+        return []
+
+    return [LintResult(
+        rule_id=21,
+        severity=Severity.WARNING,
+        message=(
+            f"Python entry-point script(s) in scripts/ lack PEP 723 inline dependency "
+            f"metadata (# /// script block): {', '.join(violations)}. "
+            "Declare dependencies inline so agents can invoke with `uv run` without a "
+            "separate install step."
+        ),
+        file="scripts/",
     )]
 
 

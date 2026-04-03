@@ -5,7 +5,7 @@ description: >
 metadata:
   author: William Yeh <william.pjyeh@gmail.com>
   license: Apache-2.0
-  version: 0.9.0
+  version: 0.10.0
 ---
 
 # Agent Skill Linter
@@ -19,7 +19,7 @@ Checks agent skills for spec compliance and publishing readiness.
 ### Step 1 — Get the full picture
 
 ```bash
-uvx --from git+https://github.com/William-Yeh/agent-skill-linter skill-lint check <target>
+./scripts/skill-lint.py check <target>
 ```
 
 ### Step 2 — Fix Errors first
@@ -29,23 +29,28 @@ uvx --from git+https://github.com/William-Yeh/agent-skill-linter skill-lint chec
 ### Step 3 — Auto-fix Warnings
 
 ```bash
-uvx --from git+https://github.com/William-Yeh/agent-skill-linter skill-lint check <target> --fix
+./scripts/skill-lint.py check <target> --fix
 ```
 
 For fixable rules without CLI, use the templates in `references/fix-templates.md`.
 
 ### Step 4 — Resolve remaining Warnings manually
 
-CSO naming (Rules 11–12), Python invocations (Rule 13), description conciseness (Rule 18), README-tier sections in SKILL.md (Rule 19) — see the rule table below.
+CSO description prefix (Rule 11), Python invocations (Rule 13), README-tier sections in SKILL.md (Rule 19) — see the rule table below.
 
-### Step 5 — Semantic review: description
+### Step 5 — Semantic review: CSO signal
 
-Rules 11 and 18 catch structural patterns but not meaning. Read the `description` frontmatter and ask: **does it function purely as a routing signal?**
+Rule 11 catches structural patterns but not meaning. Read the `description` and `name` frontmatter and ask: **do they function purely as routing signals?**
 
-Flag it if it:
+> See `references/semantic-rules.md` — Rules 12 and 18 for examples.
+
+Flag the description if it:
 - Enumerates what the skill checks, handles, or supports
 - Reads as a feature summary or workflow overview
+- Contains elaboration labels (`Triggers on:`, `Use cases:`, `Checks:`) or multiple sentences
 - Could be trimmed to one clause without losing routing precision
+
+Flag the name if it reads as a noun phrase rather than an action — prefer gerunds (`creating-skills`, `processing-pdfs`) over noun forms (`skill-creator`, `pdf-processor`). Short well-known names (`pdf`, `commit`) are fine.
 
 A good description names the trigger condition only. Everything else belongs in the skill body.
 
@@ -60,21 +65,26 @@ Flag them if they:
 
 ### Step 7 — Semantic review: content overlap
 
-Rule 8 catches identical lines between SKILL.md and README. Ask: **is the same information conveyed in different words?**
+The linter does not check this. Ask: **is the same information conveyed in different words across SKILL.md and README?**
 
-Flag paraphrased repetition that the linter cannot detect. SKILL.md should be agent-focused (triage workflow, rules); README should be human-focused (installation, usage examples).
+> See `references/semantic-rules.md` — Rule 8 for examples.
+
+Flag paraphrased repetition. SKILL.md should be agent-focused (triage workflow, rules); README should be human-focused (installation, usage examples).
 
 ### Step 8 — Semantic review: progressive disclosure
 
-Rules 15 and 16 use heading keywords and line counts. Ask: **would an agent look up this section reactively rather than read it upfront?**
+Rule 15 flags known reference-tier keywords, but not all reactive content has a recognizable heading. Ask: **would an agent look up this section reactively rather than read it upfront?**
+
+> See `references/semantic-rules.md` — Rule 16 for examples.
 
 Flag sections for `references/` if they:
 - Are reference material regardless of their heading name (e.g. "Background", "How It Works")
-- Are dense or conditional even if under 30 lines
+- Are dense or conditional — even if short and not caught by Rule 15
+- Are step-specific detail blocks that bulk up the main workflow without being needed upfront
 
 ### Step 9 — Address Info items as polish
 
-Content dedup (Rule 8), body length (Rule 9), non-standard dirs (Rule 10), skill isolation (Rule 17).
+Body length (Rule 9), non-standard dirs (Rule 10), skill isolation (Rule 17).
 
 ## What It Checks
 
@@ -87,25 +97,23 @@ Content dedup (Rule 8), body length (Rule 9), non-standard dirs (Rule 10), skill
 | 5 | `.github/workflows/` has CI workflow | Warning | Yes |
 | 6 | README has Installation section | Warning | Yes |
 | 7 | README has Usage section with starter prompts + CLI subsection | Warning | Partial + Step 6 |
-| 8 | Content dedup between README.md and SKILL.md | Info | Step 7 |
 | 9 | SKILL.md body < 500 lines | Info | — |
 | 10 | Non-standard directories flagged | Info | — |
 | 11 | CSO: description starts with "Use when..." | Warning | Step 5 |
-| 12 | CSO: name is action-oriented (gerund preferred) | Info | — |
 | 13 | Python invocation consistency (`uv run python` in uv projects) | Warning | — |
 | 14 | Progressive disclosure: embedded templates (4-backtick fences) → `references/` | Warning | Yes |
 | 15 | Progressive disclosure: reference-tier headings (Troubleshooting, FAQ, Advanced…) → `references/` | Warning | Yes + Step 8 |
-| 16 | Progressive disclosure: heavy step sections (>30 lines) → `references/` | Info | Step 8 |
 | 17 | Skill isolation: SKILL.md at repo root alongside non-skill artifacts | Info | — |
-| 18 | CSO: description is a single routing clause (no elaboration labels or multiple sentences) | Warning | Step 5 |
 | 19 | Division of labor: README-tier sections (Installation, Features, Getting Started…) in SKILL.md | Warning | — |
+| 20 | Triage workflow has 3+ steps but no semantic review step (e.g. "Ask: does it…") | Info | Step 5–8 |
+| 21 | Python entry-point scripts in `scripts/` lack PEP 723 inline dependency metadata | Warning | — |
 
 ## CLI Reference
 
 ```bash
-skill-lint check .                            # Lint repo-root skill
-skill-lint check ./my-skill --fix             # Auto-fix fixable issues
-skill-lint check ./my-skill --format json     # JSON output for CI
+./scripts/skill-lint.py check .                            # Lint repo-root skill
+./scripts/skill-lint.py check ./my-skill --fix             # Auto-fix fixable issues
+./scripts/skill-lint.py check ./my-skill --format json     # JSON output for CI
 ```
 
 Exit code 1 on errors, 0 otherwise.

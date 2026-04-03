@@ -8,9 +8,9 @@ from pathlib import Path
 import pytest
 import yaml
 
-from agent_skill_linter.linter import lint_skill
-from agent_skill_linter.models import Severity
-from agent_skill_linter import rules
+from linter import lint_skill
+from models import Severity
+import rules
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -175,20 +175,6 @@ class TestRule7:
 # ---------------------------------------------------------------------------
 
 
-class TestRule8:
-    def test_heavy_overlap(self, tmp_path):
-        body = "\n".join(f"This is a detailed line number {i} of content" for i in range(50))
-        (tmp_path / "SKILL.md").write_text(f"---\nname: x\ndescription: x\n---\n\n{body}\n")
-        (tmp_path / "README.md").write_text(f"# Readme\n\n{body}\n")
-        results = rules.check_content_dedup(tmp_path)
-        assert len(results) == 1
-        assert results[0].severity == Severity.INFO
-
-    def test_no_overlap(self):
-        results = rules.check_content_dedup(FIXTURES / "valid-skill")
-        assert results == []
-
-
 # ---------------------------------------------------------------------------
 # Rule 9: SKILL.md body length
 # ---------------------------------------------------------------------------
@@ -250,85 +236,6 @@ class TestRule11:
 
     def test_valid_skill(self):
         results = rules.check_cso_description(FIXTURES / "valid-skill")
-        assert results == []
-
-
-# ---------------------------------------------------------------------------
-# Rule 12: CSO name
-# ---------------------------------------------------------------------------
-
-
-class TestRule12:
-    def test_noun_form_name(self, tmp_path):
-        (tmp_path / "SKILL.md").write_text(
-            "---\nname: pdf-processor\ndescription: Use when working with PDFs.\n---\n\n# Body\n"
-        )
-        results = rules.check_cso_name(tmp_path)
-        assert len(results) == 1
-        assert results[0].severity == Severity.INFO
-        assert "pdf-processor" in results[0].message
-
-    def test_gerund_name(self, tmp_path):
-        (tmp_path / "SKILL.md").write_text(
-            "---\nname: processing-pdfs\ndescription: Use when working with PDFs.\n---\n\n# Body\n"
-        )
-        results = rules.check_cso_name(tmp_path)
-        assert results == []
-
-    def test_gerund_suffix(self, tmp_path):
-        (tmp_path / "SKILL.md").write_text(
-            "---\nname: condition-based-waiting\ndescription: Use when tests are flaky.\n---\n\n# Body\n"
-        )
-        results = rules.check_cso_name(tmp_path)
-        assert results == []
-
-
-# ---------------------------------------------------------------------------
-# Rule 18: CSO description conciseness
-# ---------------------------------------------------------------------------
-
-
-class TestRule18:
-    def _make_skill(self, tmp_path: Path, description: str) -> Path:
-        fm = yaml.safe_dump({"name": "t", "description": description}, default_flow_style=False)
-        (tmp_path / "SKILL.md").write_text(f"---\n{fm}---\n\n# Body\n", encoding="utf-8")
-        return tmp_path
-
-    def test_single_clause_passes(self, tmp_path):
-        self._make_skill(tmp_path, "Use when validating a skill for publishing readiness.")
-        assert rules.check_cso_description_conciseness(tmp_path) == []
-
-    def test_triggers_on_label_flagged(self, tmp_path):
-        self._make_skill(tmp_path, "Use when linting a skill. Triggers on: missing LICENSE, no CI.")
-        results = rules.check_cso_description_conciseness(tmp_path)
-        assert len(results) == 1
-        assert results[0].rule_id == 18
-        assert results[0].severity == Severity.WARNING
-
-    def test_use_cases_label_flagged(self, tmp_path):
-        self._make_skill(tmp_path, "Use when processing data. Use cases: CSV, JSON, XML.")
-        results = rules.check_cso_description_conciseness(tmp_path)
-        assert len(results) == 1
-
-    def test_checks_label_flagged(self, tmp_path):
-        self._make_skill(tmp_path, "Use when reviewing code. Checks: style, tests, security.")
-        results = rules.check_cso_description_conciseness(tmp_path)
-        assert len(results) == 1
-
-    def test_multi_sentence_flagged(self, tmp_path):
-        self._make_skill(tmp_path, "Use when linting a skill. It checks many things. Very useful.")
-        results = rules.check_cso_description_conciseness(tmp_path)
-        assert len(results) == 1
-        assert "3 sentences" in results[0].message
-
-    def test_two_sentences_flagged(self, tmp_path):
-        self._make_skill(tmp_path, "Use when linting. It is helpful.")
-        results = rules.check_cso_description_conciseness(tmp_path)
-        assert len(results) == 1
-        assert "2 sentences" in results[0].message
-
-    def test_valid_skill_passes(self):
-        results = rules.check_cso_description_conciseness(FIXTURES / "valid-skill")
         assert results == []
 
 
@@ -450,8 +357,8 @@ class TestFixIntegration:
         shutil.copytree(FIXTURES / "no-ci", tmp_path / "skill", dirs_exist_ok=True)
         skill_dir = tmp_path / "skill"
 
-        from agent_skill_linter.fixers import fix_ci_workflow
-        from agent_skill_linter.models import LintResult
+        from fixers import fix_ci_workflow
+        from models import LintResult
 
         fix_ci_workflow(skill_dir, LintResult(rule_id=5, severity=Severity.WARNING, message=""))
 
@@ -481,8 +388,8 @@ class TestRule14:
         shutil.copytree(FIXTURES / "dense-skill", tmp_path / "skill", dirs_exist_ok=True)
         skill_dir = tmp_path / "skill"
 
-        from agent_skill_linter.fixers import fix_progressive_disclosure
-        from agent_skill_linter.models import LintResult
+        from fixers import fix_progressive_disclosure
+        from models import LintResult
 
         fix_progressive_disclosure(skill_dir, LintResult(rule_id=14, severity=Severity.WARNING, message=""))
 
@@ -524,8 +431,8 @@ class TestRule15:
         shutil.copytree(FIXTURES / "semantic-sections", tmp_path / "skill", dirs_exist_ok=True)
         skill_dir = tmp_path / "skill"
 
-        from agent_skill_linter.fixers import fix_semantic_sections
-        from agent_skill_linter.models import LintResult
+        from fixers import fix_semantic_sections
+        from models import LintResult
 
         fix_semantic_sections(skill_dir, LintResult(rule_id=15, severity=Severity.WARNING, message=""))
 
@@ -537,44 +444,6 @@ class TestRule15:
 
         # Re-lint: rule 15 no longer fires
         assert rules.check_semantic_sections(skill_dir) == []
-
-
-# ---------------------------------------------------------------------------
-# Rule 16: Heavy step-conditional sections
-# ---------------------------------------------------------------------------
-
-
-def _make_step_skill(tmp_path, step_lines: int) -> Path:
-    skill_dir = tmp_path / "skill"
-    skill_dir.mkdir()
-    body_lines = "\n".join(f"- detail line {i}" for i in range(step_lines))
-    (skill_dir / "SKILL.md").write_text(
-        f"---\nname: step-skill\ndescription: Use when testing.\nmetadata:\n  author: T\n---\n\n"
-        f"## Quick Start\n\nRun the tool.\n\n"
-        f"## Step 2 — Apply fixes\n\n{body_lines}\n",
-        encoding="utf-8",
-    )
-    return skill_dir
-
-
-class TestRule16:
-    def test_detects_heavy_step_section(self, tmp_path):
-        skill_dir = _make_step_skill(tmp_path, step_lines=35)
-        results = rules.check_step_conditional_sections(skill_dir)
-        assert len(results) == 1
-        r = results[0]
-        assert r.rule_id == 16
-        assert r.fixable is False
-        assert "Step 2" in r.message
-
-    def test_short_step_section_passes(self, tmp_path):
-        skill_dir = _make_step_skill(tmp_path, step_lines=10)
-        results = rules.check_step_conditional_sections(skill_dir)
-        assert results == []
-
-    def test_non_step_heading_not_flagged(self):
-        results = rules.check_step_conditional_sections(FIXTURES / "valid-skill")
-        assert results == []
 
 
 # ---------------------------------------------------------------------------
@@ -591,8 +460,8 @@ def dense_skill(tmp_path) -> Path:
 
 def test_rule14_fix_idempotent(dense_skill):
     """Calling the fixer twice must not duplicate content in references/."""
-    from agent_skill_linter.fixers import fix_progressive_disclosure
-    from agent_skill_linter.models import LintResult
+    from fixers import fix_progressive_disclosure
+    from models import LintResult
 
     skill_dir = dense_skill
     stub = LintResult(rule_id=14, severity=Severity.WARNING, message="")
@@ -608,8 +477,8 @@ def test_rule14_fix_idempotent(dense_skill):
 
 def test_rule14_fix_appends_to_existing_references(dense_skill):
     """Fixer must append to an existing references/fix-templates.md, not overwrite."""
-    from agent_skill_linter.fixers import fix_progressive_disclosure
-    from agent_skill_linter.models import LintResult
+    from fixers import fix_progressive_disclosure
+    from models import LintResult
 
     skill_dir = dense_skill
     refs_dir = skill_dir / "references"
@@ -640,7 +509,7 @@ def test_rule14_multiple_template_sections(tmp_path):
     assert "Templates A" in results[0].message
     assert "Templates B" in results[0].message
 
-    from agent_skill_linter.fixers import fix_progressive_disclosure
+    from fixers import fix_progressive_disclosure
     fix_progressive_disclosure(skill_dir, results[0])
 
     skill_text = (skill_dir / "SKILL.md").read_text()
@@ -664,8 +533,8 @@ def semantic_skill(tmp_path) -> Path:
 
 def test_rule15_fix_idempotent(semantic_skill):
     """Calling the fixer twice must not duplicate content in references/."""
-    from agent_skill_linter.fixers import fix_semantic_sections
-    from agent_skill_linter.models import LintResult
+    from fixers import fix_semantic_sections
+    from models import LintResult
 
     skill_dir = semantic_skill
     stub = LintResult(rule_id=15, severity=Severity.WARNING, message="")
@@ -681,8 +550,8 @@ def test_rule15_fix_idempotent(semantic_skill):
 
 def test_rule15_fix_appends_to_existing_references(semantic_skill):
     """Fixer must append to a pre-existing references/ file, not overwrite it."""
-    from agent_skill_linter.fixers import fix_semantic_sections
-    from agent_skill_linter.models import LintResult
+    from fixers import fix_semantic_sections
+    from models import LintResult
 
     skill_dir = semantic_skill
     refs_dir = skill_dir / "references"
@@ -713,7 +582,7 @@ def test_rule15_two_sections_same_target(tmp_path):
     assert "Troubleshooting" in results[0].message
     assert "FAQ" in results[0].message
 
-    from agent_skill_linter.fixers import fix_semantic_sections
+    from fixers import fix_semantic_sections
     fix_semantic_sections(skill_dir, results[0])
 
     ts = skill_dir / "references" / "troubleshooting.md"
@@ -734,77 +603,6 @@ def test_rule15_pointer_section_not_reflagged(tmp_path):
         encoding="utf-8",
     )
     assert rules.check_semantic_sections(skill_dir) == []
-
-
-# ---------------------------------------------------------------------------
-# Rule 16 — additional edge cases
-# ---------------------------------------------------------------------------
-
-
-def test_rule16_exactly_at_threshold_passes(tmp_path):
-    """A step section of exactly 30 lines must not trigger (threshold is >30).
-
-    The section body includes the heading line + blank line, so 28 detail
-    lines yield a 30-line section total — right at the threshold, not over.
-    """
-    skill_dir = _make_step_skill(tmp_path, step_lines=28)
-    assert rules.check_step_conditional_sections(skill_dir) == []
-
-
-def test_rule16_phase_heading_detected(tmp_path):
-    skill_dir = tmp_path / "skill"
-    skill_dir.mkdir()
-    body = "\n".join(f"- item {i}" for i in range(35))
-    (skill_dir / "SKILL.md").write_text(
-        f"---\nname: t\ndescription: Use when.\nmetadata:\n  author: T\n---\n\n"
-        f"## Phase 2 — Deploy\n\n{body}\n",
-        encoding="utf-8",
-    )
-    results = rules.check_step_conditional_sections(skill_dir)
-    assert len(results) == 1
-    assert "Phase 2" in results[0].message
-
-
-def test_rule16_numbered_heading_detected(tmp_path):
-    skill_dir = tmp_path / "skill"
-    skill_dir.mkdir()
-    body = "\n".join(f"- item {i}" for i in range(35))
-    (skill_dir / "SKILL.md").write_text(
-        f"---\nname: t\ndescription: Use when.\nmetadata:\n  author: T\n---\n\n"
-        f"## 3. Apply fixes\n\n{body}\n",
-        encoding="utf-8",
-    )
-    results = rules.check_step_conditional_sections(skill_dir)
-    assert len(results) == 1
-    assert "3." in results[0].message
-
-
-def test_rule16_after_heading_detected(tmp_path):
-    skill_dir = tmp_path / "skill"
-    skill_dir.mkdir()
-    body = "\n".join(f"- item {i}" for i in range(35))
-    (skill_dir / "SKILL.md").write_text(
-        f"---\nname: t\ndescription: Use when.\nmetadata:\n  author: T\n---\n\n"
-        f"## After running the scan\n\n{body}\n",
-        encoding="utf-8",
-    )
-    results = rules.check_step_conditional_sections(skill_dir)
-    assert len(results) == 1
-    assert "After running" in results[0].message
-
-
-def test_rule16_once_heading_detected(tmp_path):
-    skill_dir = tmp_path / "skill"
-    skill_dir.mkdir()
-    body = "\n".join(f"- item {i}" for i in range(35))
-    (skill_dir / "SKILL.md").write_text(
-        f"---\nname: t\ndescription: Use when.\nmetadata:\n  author: T\n---\n\n"
-        f"## Once complete\n\n{body}\n",
-        encoding="utf-8",
-    )
-    results = rules.check_step_conditional_sections(skill_dir)
-    assert len(results) == 1
-    assert "Once complete" in results[0].message
 
 
 # ---------------------------------------------------------------------------
@@ -986,4 +784,118 @@ class TestRule19:
 
     def test_valid_skill_passes(self):
         results = rules.check_readme_tier_in_skill(FIXTURES / "valid-skill")
+        assert results == []
+
+
+class TestRule20:
+    """Rule 20: triage workflow with 3+ steps must include at least one semantic step."""
+
+    def _make_skill(self, tmp_path: Path, body: str) -> None:
+        (tmp_path / "SKILL.md").write_text(
+            "---\nname: t\ndescription: Use when.\nmetadata:\n  author: T\n---\n\n"
+            + body,
+            encoding="utf-8",
+        )
+
+    def test_command_only_workflow_flagged(self):
+        """Fixture: 3 steps, all commands — should flag."""
+        results = rules.check_triage_semantic_balance(FIXTURES / "command-only-workflow")
+        assert len(results) == 1
+        assert results[0].rule_id == 20
+        assert results[0].severity == Severity.INFO
+
+    def test_workflow_with_ask_step_passes(self, tmp_path):
+        """3 steps where one contains 'Ask:' — should pass."""
+        self._make_skill(
+            tmp_path,
+            "## Triage\n\n"
+            "### Step 1 — Run\n\n```bash\ntool check .\n```\n\n"
+            "### Step 2 — Fix\n\n```bash\ntool --fix\n```\n\n"
+            "### Step 3 — Review\n\nAsk: does the description route correctly?\n",
+        )
+        results = rules.check_triage_semantic_balance(tmp_path)
+        assert results == []
+
+    def test_workflow_with_read_and_ask_passes(self, tmp_path):
+        """'Read X and ask' phrasing — should pass."""
+        self._make_skill(
+            tmp_path,
+            "## Triage\n\n"
+            "### Step 1 — Lint\n\n```bash\ntool .\n```\n\n"
+            "### Step 2 — Fix\n\nApply suggested fixes.\n\n"
+            "### Step 3 — Semantic\n\nRead the description and ask: is it a routing signal?\n",
+        )
+        results = rules.check_triage_semantic_balance(tmp_path)
+        assert results == []
+
+    def test_fewer_than_threshold_not_flagged(self, tmp_path):
+        """Fewer than 3 step headings — rule does not fire."""
+        self._make_skill(
+            tmp_path,
+            "## Triage\n\n"
+            "### Step 1 — Run\n\n```bash\ntool .\n```\n\n"
+            "### Step 2 — Fix\n\nApply fixes.\n",
+        )
+        results = rules.check_triage_semantic_balance(tmp_path)
+        assert results == []
+
+    def test_no_skill_md_returns_empty(self, tmp_path):
+        results = rules.check_triage_semantic_balance(tmp_path)
+        assert results == []
+
+    def test_message_mentions_step_count(self):
+        results = rules.check_triage_semantic_balance(FIXTURES / "command-only-workflow")
+        assert "3" in results[0].message
+
+
+class TestRule21:
+    """Rule 21: Python entry-point scripts in scripts/ must declare deps via PEP 723."""
+
+    def _write_script(self, scripts_dir: Path, name: str, content: str) -> None:
+        scripts_dir.mkdir(parents=True, exist_ok=True)
+        (scripts_dir / name).write_text(content, encoding="utf-8")
+
+    def test_entry_point_without_pep723_flagged(self):
+        """Fixture: shebang present, no # /// script block — should flag."""
+        results = rules.check_pep723_entry_points(FIXTURES / "no-pep723")
+        assert len(results) == 1
+        assert results[0].rule_id == 21
+        assert results[0].severity == Severity.WARNING
+        assert "skill-lint.py" in results[0].message
+
+    def test_entry_point_with_pep723_passes(self, tmp_path):
+        """Shebang + # /// script block — should pass."""
+        self._write_script(
+            tmp_path / "scripts",
+            "skill-lint.py",
+            "#!/usr/bin/env -S uv run\n# /// script\n# requires-python = '>=3.12'\n# ///\nimport sys\n",
+        )
+        results = rules.check_pep723_entry_points(tmp_path)
+        assert results == []
+
+    def test_module_without_shebang_not_flagged(self, tmp_path):
+        """Module file (no shebang) is not an entry point — must not flag."""
+        self._write_script(
+            tmp_path / "scripts",
+            "models.py",
+            "from dataclasses import dataclass\n",
+        )
+        results = rules.check_pep723_entry_points(tmp_path)
+        assert results == []
+
+    def test_no_scripts_dir_returns_empty(self, tmp_path):
+        results = rules.check_pep723_entry_points(tmp_path)
+        assert results == []
+
+    def test_multiple_violations_reported_together(self, tmp_path):
+        """Two entry points without PEP 723 — both named in a single result."""
+        for name in ("tool-a.py", "tool-b.py"):
+            self._write_script(tmp_path / "scripts", name, "#!/usr/bin/env python3\npass\n")
+        results = rules.check_pep723_entry_points(tmp_path)
+        assert len(results) == 1
+        assert "tool-a.py" in results[0].message
+        assert "tool-b.py" in results[0].message
+
+    def test_valid_skill_passes(self):
+        results = rules.check_pep723_entry_points(FIXTURES / "valid-skill")
         assert results == []

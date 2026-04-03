@@ -5,20 +5,21 @@ from __future__ import annotations
 import re
 import subprocess
 from collections import defaultdict
+from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
 
 import click
 import yaml
 
-from agent_skill_linter.models import LintResult
-from agent_skill_linter.rules import _REFERENCE_TIER_RE, _repo_path
+from models import LintResult
+from rules import _REFERENCE_TIER_RE, _repo_path
 
 # ---------------------------------------------------------------------------
 # Dispatcher
 # ---------------------------------------------------------------------------
 
-_FIXERS: dict[int, callable] = {}
+_FIXERS: dict[int, Callable] = {}
 
 
 def _fixer(rule_id: int):
