@@ -5,7 +5,7 @@ description: >
 metadata:
   author: William Yeh <william.pjyeh@gmail.com>
   license: Apache-2.0
-  version: 0.10.0
+  version: 0.11.0
 ---
 
 # Agent Skill Linter

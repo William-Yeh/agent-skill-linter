@@ -23,10 +23,10 @@ def _read_text(path: Path) -> str | None:
 
 
 def _repo_root(skill_dir: Path) -> Path:
-    """Return the repo root if skill_dir is a direct subdirectory of one; else skill_dir."""
-    parent = skill_dir.parent
-    if (parent / ".git").exists():
-        return parent
+    """Walk up from skill_dir to find the git repo root; return skill_dir if none found."""
+    for candidate in [skill_dir, *skill_dir.parents]:
+        if (candidate / ".git").exists():
+            return candidate
     return skill_dir
 
 

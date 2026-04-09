@@ -6,7 +6,6 @@ import shutil
 from pathlib import Path
 
 import pytest
-import yaml
 
 from linter import lint_skill
 from models import Severity
@@ -42,6 +41,38 @@ class TestValidSkill:
 
 
 # ---------------------------------------------------------------------------
+# _repo_root helper
+# ---------------------------------------------------------------------------
+
+
+class TestRepoRoot:
+    def test_direct_subdir(self, tmp_path):
+        """skill/ one level under .git → parent is repo root."""
+        (tmp_path / ".git").mkdir()
+        skill_dir = tmp_path / "skill"
+        skill_dir.mkdir()
+        assert rules._repo_root(skill_dir) == tmp_path
+
+    def test_deeply_nested(self, tmp_path):
+        """skill/ three levels under .git → repo root found by walking up."""
+        (tmp_path / ".git").mkdir()
+        skill_dir = tmp_path / "plugins" / "myplugin" / "skill"
+        skill_dir.mkdir(parents=True)
+        assert rules._repo_root(skill_dir) == tmp_path
+
+    def test_no_git_returns_self(self, tmp_path):
+        """No .git anywhere → falls back to skill_dir itself."""
+        skill_dir = tmp_path / "skill"
+        skill_dir.mkdir()
+        assert rules._repo_root(skill_dir) == skill_dir
+
+    def test_at_repo_root(self, tmp_path):
+        """skill_dir IS the repo root (SKILL.md at root) → returns itself."""
+        (tmp_path / ".git").mkdir()
+        assert rules._repo_root(tmp_path) == tmp_path
+
+
+# ---------------------------------------------------------------------------
 # Rule 1: SKILL.md spec compliance
 # ---------------------------------------------------------------------------
 
@@ -64,8 +95,9 @@ class TestRule1:
 
 
 class TestRule2:
-    def test_missing_license(self):
-        results = rules.check_license(FIXTURES / "missing-license")
+    def test_missing_license(self, tmp_path):
+        shutil.copytree(FIXTURES / "missing-license", tmp_path / "skill")
+        results = rules.check_license(tmp_path / "skill")
         assert len(results) == 1
         assert results[0].fixable
 
@@ -112,8 +144,9 @@ class TestRule4:
 
 
 class TestRule5:
-    def test_no_ci(self):
-        results = rules.check_ci_workflow(FIXTURES / "no-ci")
+    def test_no_ci(self, tmp_path):
+        shutil.copytree(FIXTURES / "no-ci", tmp_path / "skill")
+        results = rules.check_ci_workflow(tmp_path / "skill")
         assert len(results) == 1
         assert results[0].fixable
 
