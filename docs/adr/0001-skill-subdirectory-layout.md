@@ -66,8 +66,11 @@ The linter rules were updated to support this layout:
 - Manual installation instructions in README must specify the target directory
   name explicitly (e.g. `~/.claude/skills/agent-skill-linter/`) rather than
   the generic skills folder.
-- `_repo_root` intentionally climbs only one level to prevent test fixture
-  contamination: deeply nested test fixtures should not accidentally resolve to
-  the project's own LICENSE/README.
+- `_repo_root` walks upward through all parents until it finds a `.git` entry,
+  supporting arbitrarily nested skill directories (e.g. monorepos, plugin trees).
+  Test fixture contamination is prevented differently: fixture directories that
+  need an isolated repo root include a plain `.gitroot` file. Git cannot track
+  files named `.git` inside subdirectories, so `.gitroot` is used as the marker
+  instead. `_repo_root()` recognises both `.git` and `.gitroot` as root signals.
 - The root `pyproject.toml` is dev-only (pytest, ruff) with no package
   definition. Runtime dependencies are declared in `skill-lint.py` via PEP 723.

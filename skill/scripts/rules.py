@@ -23,9 +23,13 @@ def _read_text(path: Path) -> str | None:
 
 
 def _repo_root(skill_dir: Path) -> Path:
-    """Walk up from skill_dir to find the git repo root; return skill_dir if none found."""
+    """Walk up from skill_dir to find the git repo root; return skill_dir if none found.
+
+    Recognises both .git (real repo) and .gitroot (test fixture marker, since git
+    cannot track files named .git inside subdirectories).
+    """
     for candidate in [skill_dir, *skill_dir.parents]:
-        if (candidate / ".git").exists():
+        if (candidate / ".git").exists() or (candidate / ".gitroot").exists():
             return candidate
     return skill_dir
 

@@ -5,12 +5,35 @@ description: >
 metadata:
   author: William Yeh <william.pjyeh@gmail.com>
   license: Apache-2.0
-  version: 0.11.0
+  version: 0.12.0
 ---
 
 # Agent Skill Linter
 
 Checks agent skills for spec compliance and publishing readiness.
+
+## Expected Layout
+
+A well-structured skill repo separates agent-facing files (installed by `npx skills add`) from repo artifacts:
+
+```
+my-skill/
+├── skill/               ← only this dir is installed by npx
+│   ├── SKILL.md
+│   ├── references/
+│   │   └── fix-templates.md
+│   └── scripts/         ← skill-invoked scripts (optional)
+│       └── main.py
+├── src/                 ← linter/library source (not installed)
+├── tests/
+├── README.md
+├── LICENSE
+├── pyproject.toml
+└── .github/
+    └── workflows/
+```
+
+The **lint target** is the `skill/` subdirectory (or repo root for older repos with no `skill/` dir).
 
 ## Triage Workflow
 

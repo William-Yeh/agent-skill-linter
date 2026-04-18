@@ -29,15 +29,54 @@ def results_for_rule(results, rule_id):
 
 
 class TestValidSkill:
-    def test_no_errors(self):
-        results = lint_skill(FIXTURES / "valid-skill")
-        errors = [r for r in results if r.severity == Severity.ERROR]
+    @pytest.fixture(scope="class")
+    def lint_results(self):
+        return lint_skill(FIXTURES / "valid-skill")
+
+    def test_no_errors(self, lint_results):
+        errors = [r for r in lint_results if r.severity == Severity.ERROR]
         assert errors == [], f"Unexpected errors: {errors}"
 
-    def test_no_warnings(self):
-        results = lint_skill(FIXTURES / "valid-skill")
-        warnings = [r for r in results if r.severity == Severity.WARNING]
+    def test_no_warnings(self, lint_results):
+        warnings = [r for r in lint_results if r.severity == Severity.WARNING]
         assert warnings == [], f"Unexpected warnings: {warnings}"
+
+
+# ---------------------------------------------------------------------------
+# Valid skill — subdir layout (skill/ subdir, repo artifacts at root)
+# ---------------------------------------------------------------------------
+
+
+class TestValidSkillSubdir:
+    """Canonical layout: SKILL.md in skill/, repo artifacts (README, LICENSE, .github/) at root.
+
+    NOTE: the fixture uses a plain file named .gitroot (not .git) as the repo-root marker.
+    Git cannot track files named .git inside subdirectories; _repo_root() accepts both.
+    Do not rename it to .git — git will silently ignore it and the fixture will break on clone.
+    """
+
+    SKILL_DIR = FIXTURES / "valid-skill-subdir" / "skill"
+
+    @pytest.fixture(scope="class")
+    def lint_results(self):
+        return lint_skill(self.SKILL_DIR)
+
+    def test_no_errors(self, lint_results):
+        errors = [r for r in lint_results if r.severity == Severity.ERROR]
+        assert errors == [], f"Unexpected errors: {errors}"
+
+    def test_no_warnings(self, lint_results):
+        warnings = [r for r in lint_results if r.severity == Severity.WARNING]
+        assert warnings == [], f"Unexpected warnings: {warnings}"
+
+    def test_repo_root_resolves_to_fixture_parent(self):
+        """_repo_root must resolve to valid-skill-subdir/, not the linter's own repo root."""
+        repo_root = rules._repo_root(self.SKILL_DIR)
+        assert repo_root == FIXTURES / "valid-skill-subdir"
+
+    def test_rule17_does_not_fire(self, lint_results):
+        """Rule 17 must not fire: SKILL.md is in skill/, not the repo root."""
+        assert results_for_rule(lint_results, 17) == []
 
 
 # ---------------------------------------------------------------------------
