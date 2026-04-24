@@ -5,7 +5,7 @@ description: >
 metadata:
   author: William Yeh <william.pjyeh@gmail.com>
   license: Apache-2.0
-  version: 0.12.0
+  version: 0.13.0
 ---
 
 # Agent Skill Linter
@@ -45,6 +45,8 @@ The **lint target** is the `skill/` subdirectory (or repo root for older repos w
 ./scripts/skill-lint.py check <target>
 ```
 
+Review the output for errors and warnings; confirm the full picture before proceeding to Step 2.
+
 ### Step 2 — Fix Errors first
 
 **Rule 1** (SKILL.md spec compliance) blocks publishing. Fix before anything else.
@@ -56,6 +58,8 @@ The **lint target** is the `skill/` subdirectory (or repo root for older repos w
 ```
 
 For fixable rules without CLI, use the templates in `references/fix-templates.md`.
+
+Confirm no auto-fixable warnings remain before continuing to Step 4.
 
 ### Step 4 — Resolve remaining Warnings manually
 
@@ -77,6 +81,8 @@ Flag the name if it reads as a noun phrase rather than an action — prefer geru
 
 A good description names the trigger condition only. Everything else belongs in the skill body.
 
+Confirm the description and name function as pure routing signals before moving to Step 6.
+
 ### Step 6 — Semantic review: starter prompts
 
 Rule 7 detects whether prompts exist, not whether they're useful. Read the Usage section starter prompts and ask: **do they reflect genuine, distinct trigger scenarios?**
@@ -86,6 +92,8 @@ Flag them if they:
 - All describe the same scenario with minor wording variation
 - Don't reflect the range of contexts a real user would encounter
 
+Confirm starter prompts cover genuinely distinct use cases before proceeding to Step 7.
+
 ### Step 7 — Semantic review: content overlap
 
 The linter does not check this. Ask: **is the same information conveyed in different words across SKILL.md and README?**
@@ -93,6 +101,8 @@ The linter does not check this. Ask: **is the same information conveyed in diffe
 > See `references/semantic-rules.md` — Rule 8 for examples.
 
 Flag paraphrased repetition. SKILL.md should be agent-focused (triage workflow, rules); README should be human-focused (installation, usage examples).
+
+Confirm no paraphrased repetition remains before moving to Step 8.
 
 ### Step 8 — Semantic review: progressive disclosure
 
@@ -105,7 +115,27 @@ Flag sections for `references/` if they:
 - Are dense or conditional — even if short and not caught by Rule 15
 - Are step-specific detail blocks that bulk up the main workflow without being needed upfront
 
-### Step 9 — Address Info items as polish
+Confirm all reactive content has been moved to `references/` before proceeding to Step 9.
+
+### Step 9 — Semantic review: multi-step workflow quality
+
+Only apply this step when the skill has a multi-step workflow (3+ `### Step N` headings).
+
+Read each step body and ask: **does every substantive step state how the agent knows it is done?**
+
+> See `references/semantic-rules.md` — Rule 22 for examples.
+
+Flag a step if its body describes only *what to do* with no exit condition, no gate phrase, no "proceed only when" signal. Trivially short steps (a single line) need no explicit gate.
+
+Also ask: **does the workflow include at least one step that checks actual tool output, not just verbal claims?**
+
+> See `references/semantic-rules.md` — Rule 23 for examples.
+
+Flag the workflow if every step prescribes actions but none tells the agent to read what the tool actually returned.
+
+Confirm both questions are satisfied before proceeding to Step 10.
+
+### Step 10 — Address Info items as polish
 
 Body length (Rule 9), non-standard dirs (Rule 10), skill isolation (Rule 17).
 
@@ -128,7 +158,7 @@ Body length (Rule 9), non-standard dirs (Rule 10), skill isolation (Rule 17).
 | 15 | Progressive disclosure: reference-tier headings (Troubleshooting, FAQ, Advanced…) → `references/` | Warning | Yes + Step 8 |
 | 17 | Skill isolation: SKILL.md at repo root alongside non-skill artifacts | Info | — |
 | 19 | Division of labor: README-tier sections (Installation, Features, Getting Started…) in SKILL.md | Warning | — |
-| 20 | Triage workflow has 3+ steps but no semantic review step (e.g. "Ask: does it…") | Info | Step 5–8 |
+| 20 | Triage workflow has 3+ steps but no semantic review step (e.g. "Ask: does it…") | Info | Step 5–9 |
 | 21 | Python entry-point scripts in `scripts/` lack PEP 723 inline dependency metadata | Warning | — |
 
 ## CLI Reference

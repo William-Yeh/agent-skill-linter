@@ -1,8 +1,9 @@
 # Semantic Rules Reference
 
 Rules that require agent judgment rather than mechanical detection. Use these
-examples during Step 5 (CSO signal), Step 7 (content overlap), and Step 8
-(progressive disclosure) of the triage workflow.
+examples during Step 5 (CSO signal), Step 7 (content overlap), Step 8
+(progressive disclosure), and Step 9 (multi-step workflow quality) of the
+triage workflow.
 
 ---
 
@@ -168,3 +169,114 @@ Sentence-splitting on `.?!` is fragile — `X.Y.Z` and `4xx/5xx` are not sentenc
 boundaries. Read the description as a human would. The test is: does it say *when
 to trigger the skill*, or does it start explaining *what the skill does*? The
 former is correct; the latter belongs in the skill body.
+
+---
+
+## Rule 22 — Step completion conditions
+
+**Question:** Does each substantive step state how the agent knows it is done
+before advancing to the next step?
+
+### Should flag
+
+A step that only prescribes what to do with no exit condition:
+
+~~~markdown
+### Step 1 — Run the linter
+
+```bash
+skill-lint check .
+```
+
+### Step 2 — Fix errors
+
+Review the errors and fix all reported issues.
+~~~
+
+Neither step says when it is done. An agent could skip to Step 2 after glancing
+at the output, or leave Step 2 after fixing one error, without knowing the full
+completion criterion.
+
+### Should not flag
+
+A step that names its completion condition explicitly:
+
+~~~markdown
+### Step 1 — Run the linter
+
+```bash
+skill-lint check .
+```
+
+Review the output for errors and warnings; confirm the full picture before proceeding.
+
+### Step 2 — Fix errors
+
+Fix all reported errors. Only proceed to Step 3 when `skill-lint check` reports no errors.
+~~~
+
+A trivially short step (single line of instruction) needs no explicit gate —
+its completion is self-evident.
+
+### Judgment call
+
+Completion language does not need to match a fixed phrase. "Proceed only when…",
+"Confirm X before continuing", "Ensure all Y are resolved", "Only after Z" — any
+of these convey an exit condition. The question is whether a reasonable agent
+reading the step can tell when to stop working on it.
+
+---
+
+## Rule 23 — Result verification step
+
+**Question:** Does the workflow include at least one step that grounds the agent
+in actual tool output, rather than relying on verbal self-report?
+
+### Should flag
+
+A workflow that runs a tool but never tells the agent to check what it returned:
+
+~~~markdown
+### Step 1 — Run
+
+```bash
+tool check .
+```
+
+### Step 2 — Fix
+
+Fix the errors.
+
+### Step 3 — Apply
+
+Apply the suggested changes.
+
+### Step 4 — Finish
+
+Move on to the next task.
+~~~
+
+An agent following this workflow can claim "Step 1 completed" without ever reading
+the output, because nothing in the workflow says to look at it.
+
+### Should not flag
+
+A workflow where at least one step explicitly grounds the agent in actual output:
+
+~~~markdown
+### Step 1 — Run
+
+```bash
+tool check .
+```
+
+Review the output for errors and warnings before deciding how to proceed.
+~~~
+
+### Judgment call
+
+The grounding step does not need to be dedicated to result-checking — it just
+needs to tell the agent to read the tool's actual output at least once. "If the
+tool reported any errors, fix them now" is sufficient. The failure case is a
+workflow that treats every tool invocation as a black box and never prompts the
+agent to look at what was produced.

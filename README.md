@@ -72,4 +72,4 @@ Requires [uv](https://docs.astral.sh/uv/). Exit code: 1 if errors, 0 otherwise.
 | 20 | Triage workflow has 3+ steps but no semantic review step (e.g. "Ask: does it…") | Info | No |
 | 21 | Python entry-point scripts in `scripts/` lack PEP 723 inline dependency metadata | Warning | No |
 
-Rules 8, 12, 16, and 18 were intentionally removed from automated checking — their mechanical proxies produced unreliable results. Equivalent guidance lives in the agent triage workflow (SKILL.md Steps 5–8) and `references/semantic-rules.md`.
+Rules 8, 12, 16, 18, 22, and 23 were intentionally removed from automated checking — their mechanical proxies produced unreliable results. Equivalent guidance lives in the agent triage workflow (SKILL.md Steps 5–9) and `references/semantic-rules.md`.
