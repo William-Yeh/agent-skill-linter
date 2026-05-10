@@ -71,5 +71,11 @@ Requires [uv](https://docs.astral.sh/uv/). Exit code: 1 if errors, 0 otherwise.
 | 19 | Division of labor: README-tier sections (Installation, Features, Getting Started…) in SKILL.md | Warning | No |
 | 20 | Triage workflow has 3+ steps but no semantic review step (e.g. "Ask: does it…") | Info | No |
 | 21 | Python entry-point scripts in `scripts/` lack PEP 723 inline dependency metadata | Warning | No |
+| 24 | Plugin manifest `.claude-plugin/plugin.json` exists, parses, has `name` + `version` | Error | No |
+| 25 | Skill scripts importing non-stdlib code declare a dep source (PEP 723, plugin-root pyproject.toml, or sibling dir at plugin root) | Error | No |
 
 Rules 8, 12, 16, 18, 22, and 23 were intentionally removed from automated checking — their mechanical proxies produced unreliable results. Equivalent guidance lives in the agent triage workflow (SKILL.md Steps 5–9) and `references/semantic-rules.md`.
+
+### Plugin layout support
+
+When invoked against a path containing `.claude-plugin/plugin.json`, the linter switches to **plugin mode**: it validates the manifest (Rule 24), checks each skill's script-dependency story (Rule 25), and runs the per-skill rule pack against every `skills/<name>/` directory it finds. Plugin-root artifacts (README, LICENSE, CI workflows) are checked once, not per skill. Single-skill repos continue to be linted as before.

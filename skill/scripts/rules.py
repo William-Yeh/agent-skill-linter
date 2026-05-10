@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import ast
+import json
 import re
+import sys
 import tomllib
 from datetime import datetime
 from pathlib import Path
@@ -10,6 +13,8 @@ from pathlib import Path
 import yaml
 
 from models import LintResult, Severity
+
+PLUGIN_MANIFEST_RELPATH = Path(".claude-plugin") / "plugin.json"
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -23,15 +28,28 @@ def _read_text(path: Path) -> str | None:
 
 
 def _repo_root(skill_dir: Path) -> Path:
-    """Walk up from skill_dir to find the git repo root; return skill_dir if none found.
+    """Walk up from skill_dir to find the repo or plugin root; return skill_dir if none found.
 
-    Recognises both .git (real repo) and .gitroot (test fixture marker, since git
-    cannot track files named .git inside subdirectories).
+    Recognises:
+    - `.git` (real git repo)
+    - `.gitroot` (test fixture marker, since git cannot track files named .git
+      inside subdirectories)
+    - `.claude-plugin/plugin.json` (plugin manifest — establishes the plugin
+      root regardless of git initialization state)
     """
     for candidate in [skill_dir, *skill_dir.parents]:
-        if (candidate / ".git").exists() or (candidate / ".gitroot").exists():
+        if (
+            (candidate / ".git").exists()
+            or (candidate / ".gitroot").exists()
+            or (candidate / PLUGIN_MANIFEST_RELPATH).is_file()
+        ):
             return candidate
     return skill_dir
+
+
+def _is_plugin_root(path: Path) -> bool:
+    """Return True if `path` has the plugin manifest at the conventional location."""
+    return (path / PLUGIN_MANIFEST_RELPATH).is_file()
 
 
 def _repo_path(skill_dir: Path, name: str) -> Path:
@@ -400,23 +418,31 @@ _WRAPPED_RE = re.compile(r"^(uv|poetry|pipenv)\s+run\s+python")
 
 
 def _uses_uv(skill_dir: Path) -> bool:
-    """Return True if this directory is a uv-managed project."""
-    if (skill_dir / "uv.lock").is_file():
-        return True
-    text = _read_text(skill_dir / "pyproject.toml")
-    return bool(text and "uv_build" in text)
+    """Return True if this skill (or its enclosing repo/plugin) is uv-managed."""
+    root = _repo_root(skill_dir)
+    for candidate in {skill_dir, root}:
+        if (candidate / "uv.lock").is_file():
+            return True
+        text = _read_text(candidate / "pyproject.toml")
+        if text and "uv_build" in text:
+            return True
+    return False
 
 
 def _has_non_stdlib_deps(skill_dir: Path) -> bool:
-    """Return True if pyproject.toml declares non-stdlib dependencies."""
-    text = _read_text(skill_dir / "pyproject.toml")
-    if not text:
-        return False
-    try:
-        data = tomllib.loads(text)
-    except tomllib.TOMLDecodeError:
-        return False
-    return bool(data.get("project", {}).get("dependencies"))
+    """Return True if pyproject.toml at skill_dir or repo root declares non-stdlib deps."""
+    root = _repo_root(skill_dir)
+    for candidate in {skill_dir, root}:
+        text = _read_text(candidate / "pyproject.toml")
+        if not text:
+            continue
+        try:
+            data = tomllib.loads(text)
+        except tomllib.TOMLDecodeError:
+            continue
+        if data.get("project", {}).get("dependencies"):
+            return True
+    return False
 
 
 def _scan_markdown_for_bad_python(text: str) -> bool:
@@ -764,3 +790,204 @@ def check_skill_isolation(skill_dir: Path) -> list[LintResult]:
             "into a skill/ subdirectory so `npx skills add` installs only what agents need."
         ),
     )]
+
+
+# ---------------------------------------------------------------------------
+# Rule 24: Plugin manifest validity
+# ---------------------------------------------------------------------------
+
+_REQUIRED_PLUGIN_KEYS = ("name", "version")
+
+
+def check_plugin_manifest(plugin_root: Path) -> list[LintResult]:
+    """Rule 24: `.claude-plugin/plugin.json` exists, parses, and declares required keys.
+
+    Only fires when invoked with a plugin root (presence of the manifest is the
+    trigger). For single-skill repos this rule is silent.
+    """
+    manifest_path = plugin_root / PLUGIN_MANIFEST_RELPATH
+    if not manifest_path.is_file():
+        return []  # not a plugin — single-skill rules apply instead
+
+    text = _read_text(manifest_path)
+    try:
+        data = json.loads(text or "")
+    except json.JSONDecodeError as exc:
+        return [LintResult(
+            rule_id=24,
+            severity=Severity.ERROR,
+            message=f".claude-plugin/plugin.json does not parse as JSON: {exc}.",
+            file=str(PLUGIN_MANIFEST_RELPATH),
+        )]
+
+    if not isinstance(data, dict):
+        return [LintResult(
+            rule_id=24,
+            severity=Severity.ERROR,
+            message=".claude-plugin/plugin.json must be a JSON object.",
+            file=str(PLUGIN_MANIFEST_RELPATH),
+        )]
+
+    missing = [k for k in _REQUIRED_PLUGIN_KEYS if not data.get(k)]
+    if missing:
+        return [LintResult(
+            rule_id=24,
+            severity=Severity.ERROR,
+            message=(
+                f".claude-plugin/plugin.json is missing required key(s): {', '.join(missing)}."
+            ),
+            file=str(PLUGIN_MANIFEST_RELPATH),
+        )]
+    return []
+
+
+# ---------------------------------------------------------------------------
+# Rule 25: Skill scripts importing local packages must be discoverable
+# ---------------------------------------------------------------------------
+
+# Imports the linter doesn't need to scrutinise: stdlib and a small whitelist
+# of universally-available third-party packages that won't be local to the
+# plugin (used as a sanity escape; everything else is verified explicitly).
+_STDLIB = set(sys.stdlib_module_names) | {"_typeshed"}
+
+_PEP723_FENCE_OPEN = re.compile(r"^# /// script\s*$", re.MULTILINE)
+_PEP723_FENCE_CLOSE = re.compile(r"^# ///\s*$", re.MULTILINE)
+_PEP723_DEPS_RE = re.compile(
+    r"^# dependencies\s*=\s*\[(?P<body>.*?)^# \]\s*$",
+    re.MULTILINE | re.DOTALL,
+)
+_PEP723_DEP_LINE_RE = re.compile(r'^#\s*"([^"]+)"', re.MULTILINE)
+
+
+def _has_pep723_block(text: str) -> bool:
+    """Return True if the script has a PEP 723 inline metadata block.
+
+    We don't try to validate that the block's `dependencies` cover every
+    imported name — distribution-name vs import-name mapping (pyyaml→yaml,
+    beautifulsoup4→bs4, pillow→PIL, …) is impossible to do reliably without
+    actually installing packages. The block's *presence* is the user's
+    contract that this script declares its own deps; trust the analyst on
+    the contents.
+    """
+    open_match = _PEP723_FENCE_OPEN.search(text)
+    if not open_match:
+        return False
+    return _PEP723_FENCE_CLOSE.search(text, pos=open_match.end()) is not None
+
+
+def _pyproject_dep_names(pyproject_path: Path) -> set[str]:
+    """Return all top-level package names declared in pyproject.toml.
+
+    Includes [project.dependencies], [tool.hatch.build.targets.wheel.packages],
+    and the [project].name itself (so a plugin importing its own package passes).
+    """
+    text = _read_text(pyproject_path)
+    if not text:
+        return set()
+    try:
+        data = tomllib.loads(text)
+    except tomllib.TOMLDecodeError:
+        return set()
+
+    names: set[str] = set()
+    project = data.get("project", {}) or {}
+    for entry in project.get("dependencies", []) or []:
+        names.add(re.split(r"[<>=!~\[\s@]", entry, maxsplit=1)[0].strip().replace("-", "_"))
+    if project.get("name"):
+        names.add(str(project["name"]).replace("-", "_"))
+    hatch_pkgs = (
+        data.get("tool", {}).get("hatch", {}).get("build", {})
+            .get("targets", {}).get("wheel", {}).get("packages", [])
+    )
+    names.update(str(p).replace("-", "_") for p in hatch_pkgs)
+    return names
+
+
+def _script_imports(text: str) -> set[str]:
+    """Top-level package names imported by the script (best-effort AST parse)."""
+    try:
+        tree = ast.parse(text)
+    except SyntaxError:
+        return set()
+    names: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                names.add(alias.name.split(".", 1)[0])
+        elif isinstance(node, ast.ImportFrom):
+            if node.level == 0 and node.module:
+                names.add(node.module.split(".", 1)[0])
+    return names
+
+
+def check_local_package_deps(plugin_root: Path) -> list[LintResult]:
+    """Rule 25: skill scripts importing non-stdlib code must declare a dep source.
+
+    For each `skills/<name>/scripts/*.py`, parse top-level imports. If any are
+    non-stdlib, the script must satisfy at least one of:
+      - Has a PEP 723 inline metadata block (presence is the analyst's contract
+        that runtime deps are declared inline).
+      - All non-stdlib imports resolve to either:
+          * a sibling directory at plugin root (sys.path-injection pattern), or
+          * a name declared in plugin-root `pyproject.toml`.
+
+    Otherwise the script will fail at runtime with `ModuleNotFoundError` when
+    invoked from a fresh `uv run` environment.
+
+    We deliberately do NOT validate that PEP 723 `dependencies` cover every
+    individual import name — distribution-vs-import mapping (pyyaml→yaml,
+    beautifulsoup4→bs4) is unreliable to do statically. PEP 723's *presence*
+    is the contract; trust the user on the contents.
+    """
+    if not _is_plugin_root(plugin_root):
+        return []  # only meaningful for plugin layouts
+
+    skills_dir = plugin_root / "skills"
+    if not skills_dir.is_dir():
+        return []
+
+    sibling_dirs = {
+        p.name.replace("-", "_") for p in plugin_root.iterdir() if p.is_dir()
+    }
+    pyproject_names = _pyproject_dep_names(plugin_root / "pyproject.toml")
+
+    results: list[LintResult] = []
+    for skill_dir in sorted(skills_dir.iterdir()):
+        scripts_dir = skill_dir / "scripts"
+        if not scripts_dir.is_dir():
+            continue
+        for script in sorted(scripts_dir.glob("*.py")):
+            text = _read_text(script)
+            if not text:
+                continue
+            non_stdlib_imports = sorted(n for n in _script_imports(text) if n not in _STDLIB)
+            if not non_stdlib_imports:
+                continue
+
+            # Pass condition A: PEP 723 block present (user has declared deps).
+            if _has_pep723_block(text):
+                continue
+
+            # Pass condition B: every non-stdlib import resolves to a sibling
+            # directory or is declared in plugin-root pyproject.toml.
+            unresolved = [
+                name for name in non_stdlib_imports
+                if name.replace("-", "_") not in sibling_dirs
+                and name.replace("-", "_") not in pyproject_names
+            ]
+            if not unresolved:
+                continue
+
+            rel = script.relative_to(plugin_root)
+            results.append(LintResult(
+                rule_id=25,
+                severity=Severity.ERROR,
+                message=(
+                    f"Skill script `{rel}` imports {unresolved} with no dep source: "
+                    f"no PEP 723 inline metadata, no plugin-root pyproject.toml entry, "
+                    f"and no sibling directory at plugin root. The script will fail "
+                    f"with ModuleNotFoundError under `uv run` from a fresh env."
+                ),
+                file=str(rel),
+            ))
+    return results

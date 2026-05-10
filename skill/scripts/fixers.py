@@ -13,7 +13,7 @@ import click
 import yaml
 
 from models import LintResult
-from rules import _REFERENCE_TIER_RE, _repo_path
+from rules import _REFERENCE_TIER_RE, _is_plugin_root, _repo_path
 
 # ---------------------------------------------------------------------------
 # Dispatcher
@@ -252,7 +252,7 @@ def fix_ci_workflow(skill_dir: Path, result: LintResult) -> None:
 # Rule 6: Installation section
 # ---------------------------------------------------------------------------
 
-_INSTALL_SECTION = """
+_INSTALL_SECTION_SKILL = """
 ## Installation
 
 ### Recommended: `npx skills`
@@ -275,6 +275,28 @@ Copy the skill directory to your agent's skill folder:
 | Copilot | `.github/skills/` |
 """
 
+_INSTALL_SECTION_PLUGIN = """
+## Installation
+
+Install as a Claude Code plugin:
+
+```bash
+/plugin install {owner}/{repo}
+```
+
+The plugin manifest at `.claude-plugin/plugin.json` declares the bundled
+skills; each lands in `~/.claude/plugins/cache/.../skills/<name>/` after
+install.
+
+### Local development
+
+```bash
+git clone https://github.com/{owner}/{repo}.git
+cd {repo}
+uv sync --all-groups
+```
+"""
+
 
 @_fixer(6)
 def fix_installation_section(skill_dir: Path, result: LintResult) -> None:
@@ -288,8 +310,9 @@ def fix_installation_section(skill_dir: Path, result: LintResult) -> None:
     else:
         owner, repo = "OWNER", "REPO"
 
+    template = _INSTALL_SECTION_PLUGIN if _is_plugin_root(skill_dir) else _INSTALL_SECTION_SKILL
+    section = template.format(owner=owner, repo=repo)
     text = readme_path.read_text(encoding="utf-8")
-    section = _INSTALL_SECTION.format(owner=owner, repo=repo)
     readme_path.write_text(text.rstrip() + "\n" + section, encoding="utf-8")
 
 
@@ -297,7 +320,7 @@ def fix_installation_section(skill_dir: Path, result: LintResult) -> None:
 # Rule 7: Usage section
 # ---------------------------------------------------------------------------
 
-_USAGE_SECTION = """
+_USAGE_SECTION_SKILL = """
 ## Usage
 
 After installing the skill, try these prompts with your agent:
@@ -311,6 +334,31 @@ You can also run the script directly:
 
 ```bash
 TODO: skill-name command [options]
+```
+"""
+
+_USAGE_SECTION_PLUGIN = """
+## Usage
+
+After installing the plugin, try these prompts with your agent (each bundled
+skill exposes its own trigger):
+
+- `TODO: Add a starter prompt for skill 1`
+- `TODO: Add a starter prompt for skill 2`
+- `TODO: Add a cross-skill prompt`
+
+### CLI usage
+
+The plugin's shared library exposes a console entry point:
+
+```bash
+TODO: plugin-cli-name <args>
+```
+
+Skill scripts in `skills/<name>/scripts/` are also self-contained via PEP 723:
+
+```bash
+uv run skills/<skill-name>/scripts/<script>.py [options]
 ```
 """
 
@@ -430,5 +478,6 @@ def fix_usage_section(skill_dir: Path, result: LintResult) -> None:
     if not readme_path.is_file():
         return
 
+    template = _USAGE_SECTION_PLUGIN if _is_plugin_root(skill_dir) else _USAGE_SECTION_SKILL
     text = readme_path.read_text(encoding="utf-8")
-    readme_path.write_text(text.rstrip() + "\n" + _USAGE_SECTION, encoding="utf-8")
+    readme_path.write_text(text.rstrip() + "\n" + template, encoding="utf-8")

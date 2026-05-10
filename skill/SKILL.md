@@ -5,14 +5,18 @@ description: >
 metadata:
   author: William Yeh <william.pjyeh@gmail.com>
   license: Apache-2.0
-  version: 0.13.0
+  version: 0.14.0
 ---
 
 # Agent Skill Linter
 
 Checks agent skills for spec compliance and publishing readiness.
 
-## Expected Layout
+## Expected Layouts
+
+The linter recognises two layouts and switches mode automatically.
+
+### Single skill (installed via `npx skills add`)
 
 A well-structured skill repo separates agent-facing files (installed by `npx skills add`) from repo artifacts:
 
@@ -34,6 +38,25 @@ my-skill/
 ```
 
 The **lint target** is the `skill/` subdirectory (or repo root for older repos with no `skill/` dir).
+
+### Plugin (installed via `/plugin install`)
+
+A Claude Code plugin bundles multiple skills, optional commands/hooks/agents, and shared library code under one identity. Required marker: `.claude-plugin/plugin.json` at repo root.
+
+```
+my-plugin/
+├── .claude-plugin/
+│   └── plugin.json                 ← required: name, version
+├── skills/<name>/SKILL.md          ← one or more skills
+├── <package_name>/                 ← optional shared Python code
+├── commands/, agents/, hooks/      ← optional components
+├── pyproject.toml                  ← optional; required if scripts import a
+│                                     local package not declared via PEP 723
+├── README.md, LICENSE
+└── .github/workflows/
+```
+
+The **lint target** is the plugin root. The linter auto-detects via `.claude-plugin/plugin.json`, validates the manifest (Rule 24), checks each skill's script-dependency story (Rule 25), and runs the per-skill rule pack against every `skills/<name>/`. Plugin-root artifacts (README, LICENSE, CI) are checked once across all skills, not per skill.
 
 ## Triage Workflow
 
@@ -160,12 +183,18 @@ Body length (Rule 9), non-standard dirs (Rule 10), skill isolation (Rule 17).
 | 19 | Division of labor: README-tier sections (Installation, Features, Getting Started…) in SKILL.md | Warning | — |
 | 20 | Triage workflow has 3+ steps but no semantic review step (e.g. "Ask: does it…") | Info | Step 5–9 |
 | 21 | Python entry-point scripts in `scripts/` lack PEP 723 inline dependency metadata | Warning | — |
+| 24 | Plugin manifest `.claude-plugin/plugin.json` exists, parses, has `name` + `version` | Error | — |
+| 25 | Skill scripts importing non-stdlib code declare a dep source (PEP 723, plugin-root pyproject.toml, or sibling dir) | Error | — |
+
+Rules 24 and 25 only fire in plugin mode (when `.claude-plugin/plugin.json` is present at the lint target).
 
 ## CLI Reference
 
 ```bash
-./scripts/skill-lint.py check .                            # Lint repo-root skill
-./scripts/skill-lint.py check ./my-skill --fix             # Auto-fix fixable issues
+./scripts/skill-lint.py check .                            # Auto-detect: skill or plugin
+./scripts/skill-lint.py check ./my-skill --fix             # Single-skill, auto-fix
+./scripts/skill-lint.py check ./my-plugin                  # Plugin: validates manifest +
+                                                           # iterates skills/<name>/
 ./scripts/skill-lint.py check ./my-skill --format json     # JSON output for CI
 ```
 

@@ -27,7 +27,7 @@ import click
 from rich.console import Console
 from rich.table import Table
 
-from linter import lint_skill
+from linter import detect_layout, lint_plugin, lint_skill
 from models import LintResult, Severity
 
 __version__ = "0.10.0"
@@ -56,13 +56,20 @@ def main():
     help="Output format.",
 )
 def check(path: str, fix: bool, fmt: str):
-    """Check a skill directory for issues."""
-    results = lint_skill(path)
+    """Check a skill directory or plugin root for issues.
+
+    Auto-detects: if `<path>/.claude-plugin/plugin.json` exists, runs in plugin
+    mode (validates manifest + iterates `skills/*/`). Otherwise runs in
+    single-skill mode against `<path>` directly.
+    """
+    layout = detect_layout(path)
+    runner = lint_plugin if layout == "plugin" else lint_skill
+    results = runner(path)
 
     if fix:
         from fixers import apply_fixes
         apply_fixes(path, results)
-        results = lint_skill(path)
+        results = runner(path)
 
     if fmt == "json":
         _print_json(results)

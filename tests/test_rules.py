@@ -971,3 +971,238 @@ class TestRule21:
     def test_valid_skill_passes(self):
         results = rules.check_pep723_entry_points(FIXTURES / "valid-skill")
         assert results == []
+
+
+# ---------------------------------------------------------------------------
+# Plugin layout (Rules 24 & 25 + lint_plugin orchestration)
+# ---------------------------------------------------------------------------
+
+
+class TestPluginLayout:
+    """End-to-end plugin-mode behaviour."""
+
+    PLUGIN = FIXTURES / "valid-plugin"
+
+    def test_detect_layout_returns_plugin(self):
+        from linter import detect_layout
+        assert detect_layout(self.PLUGIN) == "plugin"
+
+    def test_detect_layout_returns_skill_for_non_plugin(self):
+        from linter import detect_layout
+        assert detect_layout(FIXTURES / "valid-skill") == "skill"
+
+    def test_repo_root_recognises_plugin_manifest(self):
+        """_repo_root must walk up to the plugin root via .claude-plugin/plugin.json
+        even when the candidate path has no .git or .gitroot of its own."""
+        skill_dir = self.PLUGIN / "skills" / "skill-one"
+        assert rules._repo_root(skill_dir) == self.PLUGIN
+
+    def test_lint_plugin_clean_on_valid_fixture(self):
+        from linter import lint_plugin
+        results = lint_plugin(self.PLUGIN)
+        errors = [r for r in results if r.severity == Severity.ERROR]
+        warnings = [r for r in results if r.severity == Severity.WARNING]
+        assert errors == [], f"unexpected errors: {errors}"
+        assert warnings == [], f"unexpected warnings: {warnings}"
+
+
+class TestRule24PluginManifest:
+    """Rule 24: .claude-plugin/plugin.json validity."""
+
+    def test_passes_on_valid_plugin_fixture(self):
+        results = rules.check_plugin_manifest(FIXTURES / "valid-plugin")
+        assert results == []
+
+    def test_silent_when_not_a_plugin(self, tmp_path):
+        """Single-skill repos don't have the manifest; rule must not fire."""
+        results = rules.check_plugin_manifest(tmp_path)
+        assert results == []
+
+    def test_flags_malformed_json(self, tmp_path):
+        manifest_dir = tmp_path / ".claude-plugin"
+        manifest_dir.mkdir()
+        (manifest_dir / "plugin.json").write_text("{not valid json")
+        results = rules.check_plugin_manifest(tmp_path)
+        assert len(results) == 1
+        assert results[0].rule_id == 24
+        assert results[0].severity == Severity.ERROR
+        assert "does not parse" in results[0].message
+
+    def test_flags_missing_required_keys(self, tmp_path):
+        manifest_dir = tmp_path / ".claude-plugin"
+        manifest_dir.mkdir()
+        (manifest_dir / "plugin.json").write_text('{"description": "no name or version"}')
+        results = rules.check_plugin_manifest(tmp_path)
+        assert len(results) == 1
+        assert results[0].rule_id == 24
+        assert "missing required key" in results[0].message
+        assert "name" in results[0].message
+        assert "version" in results[0].message
+
+
+class TestRule25LocalPackageDeps:
+    """Rule 25: skill scripts must declare or co-locate their non-stdlib imports."""
+
+    def test_passes_on_valid_plugin_fixture(self):
+        results = rules.check_local_package_deps(FIXTURES / "valid-plugin")
+        assert results == []
+
+    def test_silent_when_not_a_plugin(self, tmp_path):
+        """Rule only fires for plugin layouts."""
+        (tmp_path / "skills" / "x" / "scripts").mkdir(parents=True)
+        (tmp_path / "skills" / "x" / "scripts" / "bad.py").write_text("import nonexistent\n")
+        results = rules.check_local_package_deps(tmp_path)
+        assert results == []  # no .claude-plugin/plugin.json -> not a plugin
+
+    def _make_plugin(self, tmp_path: Path) -> Path:
+        (tmp_path / ".claude-plugin").mkdir()
+        (tmp_path / ".claude-plugin" / "plugin.json").write_text(
+            '{"name": "p", "version": "0.1.0"}'
+        )
+        return tmp_path
+
+    def test_pep723_block_grants_pass(self, tmp_path):
+        """A script with a PEP 723 block passes regardless of import names —
+        we trust the user's declaration (dist→import mapping is unreliable)."""
+        self._make_plugin(tmp_path)
+        scripts = tmp_path / "skills" / "skill-a" / "scripts"
+        scripts.mkdir(parents=True)
+        (tmp_path / "skills" / "skill-a" / "SKILL.md").write_text("---\nname: a\n---\n")
+        (scripts / "tool.py").write_text(
+            "# /// script\n"
+            "# dependencies = [\n"
+            '#   "pyyaml",\n'
+            "# ]\n"
+            "# ///\n"
+            "import yaml\n"  # dist:pyyaml, import:yaml — mismatch, but PEP 723 covers it
+        )
+        results = rules.check_local_package_deps(tmp_path)
+        assert results == []
+
+    def test_sibling_dir_grants_pass(self, tmp_path):
+        """sys.path-injection pattern: import name matches a sibling dir at plugin root."""
+        self._make_plugin(tmp_path)
+        (tmp_path / "shared_lib").mkdir()
+        (tmp_path / "shared_lib" / "__init__.py").touch()
+        scripts = tmp_path / "skills" / "skill-a" / "scripts"
+        scripts.mkdir(parents=True)
+        (tmp_path / "skills" / "skill-a" / "SKILL.md").write_text("---\nname: a\n---\n")
+        (scripts / "tool.py").write_text("import shared_lib\n")
+        results = rules.check_local_package_deps(tmp_path)
+        assert results == []
+
+    def test_pyproject_dep_grants_pass(self, tmp_path):
+        self._make_plugin(tmp_path)
+        (tmp_path / "pyproject.toml").write_text(
+            "[project]\nname = \"p\"\nversion = \"0.1\"\n"
+            'dependencies = ["pydantic>=2.6"]\n'
+        )
+        scripts = tmp_path / "skills" / "skill-a" / "scripts"
+        scripts.mkdir(parents=True)
+        (tmp_path / "skills" / "skill-a" / "SKILL.md").write_text("---\nname: a\n---\n")
+        (scripts / "tool.py").write_text("import pydantic\n")
+        results = rules.check_local_package_deps(tmp_path)
+        assert results == []
+
+    def test_unresolved_import_flagged(self, tmp_path):
+        """No PEP 723, no sibling dir, no pyproject entry → fail."""
+        self._make_plugin(tmp_path)
+        scripts = tmp_path / "skills" / "skill-a" / "scripts"
+        scripts.mkdir(parents=True)
+        (tmp_path / "skills" / "skill-a" / "SKILL.md").write_text("---\nname: a\n---\n")
+        (scripts / "broken.py").write_text("import some_phantom_module\n")
+        results = rules.check_local_package_deps(tmp_path)
+        assert len(results) == 1
+        assert results[0].rule_id == 25
+        assert results[0].severity == Severity.ERROR
+        assert "some_phantom_module" in results[0].message
+        assert "broken.py" in results[0].file
+
+    def test_stdlib_only_imports_silent(self, tmp_path):
+        """Pure stdlib imports never need a dep declaration."""
+        self._make_plugin(tmp_path)
+        scripts = tmp_path / "skills" / "skill-a" / "scripts"
+        scripts.mkdir(parents=True)
+        (tmp_path / "skills" / "skill-a" / "SKILL.md").write_text("---\nname: a\n---\n")
+        (scripts / "stdlib_only.py").write_text(
+            "import argparse\nimport json\nfrom pathlib import Path\n"
+        )
+        results = rules.check_local_package_deps(tmp_path)
+        assert results == []
+
+
+# ---------------------------------------------------------------------------
+# Plugin-aware fixer templates (Rules 6 & 7)
+# ---------------------------------------------------------------------------
+
+
+class TestPluginFixerTemplates:
+    """Rule 6/7 fixers must select the plugin variant when the target has
+    .claude-plugin/plugin.json, and the single-skill variant otherwise."""
+
+    def _make_plugin(self, tmp_path: Path) -> Path:
+        (tmp_path / ".claude-plugin").mkdir()
+        (tmp_path / ".claude-plugin" / "plugin.json").write_text(
+            '{"name": "test-plugin", "version": "0.1.0"}'
+        )
+        (tmp_path / "README.md").write_text("# test-plugin\n")
+        return tmp_path
+
+    def _make_single_skill(self, tmp_path: Path) -> Path:
+        (tmp_path / "SKILL.md").write_text("---\nname: x\n---\n# x\n")
+        (tmp_path / "README.md").write_text("# x\n")
+        return tmp_path
+
+    def test_install_section_plugin_variant_used(self, tmp_path):
+        from fixers import fix_installation_section
+        from models import LintResult
+        plugin_root = self._make_plugin(tmp_path)
+        fix_installation_section(
+            plugin_root, LintResult(rule_id=6, severity=Severity.WARNING, message="")
+        )
+        readme = (plugin_root / "README.md").read_text()
+        assert "/plugin install" in readme
+        assert ".claude-plugin/plugin.json" in readme
+        assert "Local development" in readme
+        # Must NOT contain the single-skill markers:
+        assert "npx skills add" not in readme
+        assert "Manual installation" not in readme
+
+    def test_install_section_skill_variant_used(self, tmp_path):
+        from fixers import fix_installation_section
+        from models import LintResult
+        skill_dir = self._make_single_skill(tmp_path)
+        fix_installation_section(
+            skill_dir, LintResult(rule_id=6, severity=Severity.WARNING, message="")
+        )
+        readme = (skill_dir / "README.md").read_text()
+        assert "npx skills add" in readme
+        assert "Manual installation" in readme
+        # Must NOT contain plugin-only markers:
+        assert "/plugin install" not in readme
+        assert ".claude-plugin/plugin.json" not in readme
+
+    def test_usage_section_plugin_variant_used(self, tmp_path):
+        from fixers import fix_usage_section
+        from models import LintResult
+        plugin_root = self._make_plugin(tmp_path)
+        fix_usage_section(
+            plugin_root, LintResult(rule_id=7, severity=Severity.WARNING, message="")
+        )
+        readme = (plugin_root / "README.md").read_text()
+        assert "After installing the plugin" in readme
+        assert "PEP 723" in readme
+        assert "skills/<skill-name>/scripts/" in readme
+
+    def test_usage_section_skill_variant_used(self, tmp_path):
+        from fixers import fix_usage_section
+        from models import LintResult
+        skill_dir = self._make_single_skill(tmp_path)
+        fix_usage_section(
+            skill_dir, LintResult(rule_id=7, severity=Severity.WARNING, message="")
+        )
+        readme = (skill_dir / "README.md").read_text()
+        assert "After installing the skill" in readme
+        # Must NOT contain plugin-only markers:
+        assert "PEP 723" not in readme
+        assert "skills/<skill-name>/scripts/" not in readme
