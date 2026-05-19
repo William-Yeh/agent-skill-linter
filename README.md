@@ -48,34 +48,19 @@ Run the script directly from the installed skill directory:
 
 Requires [uv](https://docs.astral.sh/uv/). Exit code: 1 if errors, 0 otherwise.
 
-## Lint Rules
+## What Gets Checked
 
-| # | Rule | Severity | Fixable |
-|---|------|----------|---------|
-| 1 | SKILL.md spec compliance (via skills-ref) | Error | No |
-| 2 | LICENSE exists, Apache-2.0 or MIT, current year | Warning | Partial |
-| 3 | `metadata.author` in SKILL.md frontmatter | Warning | Yes |
-| 4 | README badges (CI, license, Agent Skills) | Warning | Yes |
-| 5 | `.github/workflows/` has CI workflow | Warning | Yes |
-| 6 | README has Installation section | Warning | Yes |
-| 7 | README has Usage section | Warning | Yes |
-| 7.1 | README Usage section has starter prompt examples | Warning | No |
-| 7.2 | README Usage section has CLI usage subsection | Info | No |
-| 9 | SKILL.md body < 500 lines | Info | No |
-| 10 | Non-standard dirs flagged | Info | No |
-| 11 | CSO: description starts with "Use when..." | Warning | No |
-| 13 | Python invocation consistency (`uv run python` in uv projects) | Warning | No |
-| 14 | Progressive disclosure: embedded templates (4-backtick fences) → `references/` | Warning | Yes |
-| 15 | Progressive disclosure: reference-tier section headings (Troubleshooting, FAQ, Advanced…) → `references/` | Warning | Yes |
-| 17 | Skill isolation: SKILL.md at repo root alongside non-skill artifacts (README, LICENSE, src/, tests/, …) | Info | No |
-| 19 | Division of labor: README-tier sections (Installation, Features, Getting Started…) in SKILL.md | Warning | No |
-| 20 | Triage workflow has 3+ steps but no semantic review step (e.g. "Ask: does it…") | Info | No |
-| 21 | Python entry-point scripts in `scripts/` lack PEP 723 inline dependency metadata | Warning | No |
-| 24 | Plugin manifest `.claude-plugin/plugin.json` exists, parses, has `name` + `version` | Error | No |
-| 25 | Skill scripts importing non-stdlib code declare a dep source (PEP 723, plugin-root pyproject.toml, or sibling dir at plugin root) | Error | No |
+The linter checks ~20 rules across six categories:
 
-Rules 8, 12, 16, 18, 22, and 23 were intentionally removed from automated checking — their mechanical proxies produced unreliable results. Equivalent guidance lives in the agent triage workflow (SKILL.md Steps 5–9) and `references/semantic-rules.md`.
+- **Spec compliance** — SKILL.md frontmatter, required fields, version (Rule 1, Error)
+- **Repo hygiene** — LICENSE, CI workflow, README sections, badges (Rules 2–7)
+- **Routing signal quality** — `description` prefix, gerund names (Rule 11, plus semantic Steps 5/6)
+- **Progressive disclosure** — body size, reference-tier headings moved to `references/` (Rules 9, 14, 15, plus semantic Step 8)
+- **Multi-step workflow quality** — exit conditions, retry caps, observable triggers (semantic Steps 8 and 9)
+- **Plugin mode** — manifest validity, script dep declarations (Rules 24, 25, Error)
 
-### Plugin layout support
+For the full rule list with severities and auto-fix status, see [`skill/SKILL.md`](skill/SKILL.md#what-it-checks). Semantic rules — judgment-based checks not amenable to static analysis — are documented in [`skill/references/semantic-rules.md`](skill/references/semantic-rules.md) and applied by the agent during Steps 5–9 of the triage workflow.
 
-When invoked against a path containing `.claude-plugin/plugin.json`, the linter switches to **plugin mode**: it validates the manifest (Rule 24), checks each skill's script-dependency story (Rule 25), and runs the per-skill rule pack against every `skills/<name>/` directory it finds. Plugin-root artifacts (README, LICENSE, CI workflows) are checked once, not per skill. Single-skill repos continue to be linted as before.
+### Plugin layout
+
+When the lint target contains `.claude-plugin/plugin.json`, the linter switches to plugin mode: validates the manifest, checks each skill's script dependencies, and runs the per-skill rule pack across all `skills/<name>/` directories. Single-skill repos lint as before.

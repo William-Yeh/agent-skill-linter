@@ -5,7 +5,7 @@ description: >
 metadata:
   author: William Yeh <william.pjyeh@gmail.com>
   license: Apache-2.0
-  version: 0.14.0
+  version: 0.15.1
 ---
 
 # Agent Skill Linter
@@ -14,49 +14,12 @@ Checks agent skills for spec compliance and publishing readiness.
 
 ## Expected Layouts
 
-The linter recognises two layouts and switches mode automatically.
+Two layouts are supported, auto-detected by presence of `.claude-plugin/plugin.json` at the target:
 
-### Single skill (installed via `npx skills add`)
+- **Single skill** — lint target is the `skill/` subdir (or repo root for legacy repos).
+- **Plugin** — lint target is the plugin root; manifest + each `skills/<name>/` checked.
 
-A well-structured skill repo separates agent-facing files (installed by `npx skills add`) from repo artifacts:
-
-```
-my-skill/
-├── skill/               ← only this dir is installed by npx
-│   ├── SKILL.md
-│   ├── references/
-│   │   └── fix-templates.md
-│   └── scripts/         ← skill-invoked scripts (optional)
-│       └── main.py
-├── src/                 ← linter/library source (not installed)
-├── tests/
-├── README.md
-├── LICENSE
-├── pyproject.toml
-└── .github/
-    └── workflows/
-```
-
-The **lint target** is the `skill/` subdirectory (or repo root for older repos with no `skill/` dir).
-
-### Plugin (installed via `/plugin install`)
-
-A Claude Code plugin bundles multiple skills, optional commands/hooks/agents, and shared library code under one identity. Required marker: `.claude-plugin/plugin.json` at repo root.
-
-```
-my-plugin/
-├── .claude-plugin/
-│   └── plugin.json                 ← required: name, version
-├── skills/<name>/SKILL.md          ← one or more skills
-├── <package_name>/                 ← optional shared Python code
-├── commands/, agents/, hooks/      ← optional components
-├── pyproject.toml                  ← optional; required if scripts import a
-│                                     local package not declared via PEP 723
-├── README.md, LICENSE
-└── .github/workflows/
-```
-
-The **lint target** is the plugin root. The linter auto-detects via `.claude-plugin/plugin.json`, validates the manifest (Rule 24), checks each skill's script-dependency story (Rule 25), and runs the per-skill rule pack against every `skills/<name>/`. Plugin-root artifacts (README, LICENSE, CI) are checked once across all skills, not per skill.
+> See `references/layouts.md` for layout diagrams, file-by-file conventions, and per-mode detection rules.
 
 ## Triage Workflow
 
@@ -87,6 +50,8 @@ Confirm no auto-fixable warnings remain before continuing to Step 4.
 ### Step 4 — Resolve remaining Warnings manually
 
 CSO description prefix (Rule 11), Python invocations (Rule 13), README-tier sections in SKILL.md (Rule 19) — see the rule table below.
+
+Confirm all remaining warnings are resolved (or explicitly accepted) before proceeding to Step 5.
 
 ### Step 5 — Semantic review: CSO signal
 
@@ -138,7 +103,13 @@ Flag sections for `references/` if they:
 - Are dense or conditional — even if short and not caught by Rule 15
 - Are step-specific detail blocks that bulk up the main workflow without being needed upfront
 
-Confirm all reactive content has been moved to `references/` before proceeding to Step 9.
+Also ask: **when a section is conditional ("After…", "Once…", "If…"), does its heading or first line name a concrete trigger event the agent can observe?**
+
+> See `references/semantic-rules.md` — Rule 27 for examples.
+
+Flag conditional sections whose trigger is vague — "After reviewing the output", "Once you understand the context" — and would leave the agent guessing when to enter the section.
+
+Confirm all reactive content has been moved to `references/` and all conditional sections name an observable trigger before proceeding to Step 9.
 
 ### Step 9 — Semantic review: multi-step workflow quality
 
@@ -156,7 +127,13 @@ Also ask: **does the workflow include at least one step that checks actual tool 
 
 Flag the workflow if every step prescribes actions but none tells the agent to read what the tool actually returned.
 
-Confirm both questions are satisfied before proceeding to Step 10.
+Also ask: **if the workflow loops on tool output, does it name a retry cap and a fallback?**
+
+> See `references/semantic-rules.md` — Rule 26 for examples.
+
+Flag the workflow if it instructs the agent to retry, iterate, or wait for a tool to succeed but has no exit condition beyond "until it works".
+
+Confirm all three questions are satisfied before proceeding to Step 10.
 
 ### Step 10 — Address Info items as polish
 

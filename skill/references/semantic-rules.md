@@ -2,8 +2,8 @@
 
 Rules that require agent judgment rather than mechanical detection. Use these
 examples during Step 5 (CSO signal), Step 7 (content overlap), Step 8
-(progressive disclosure), and Step 9 (multi-step workflow quality) of the
-triage workflow.
+(progressive disclosure, including trigger clarity), and Step 9 (multi-step
+workflow quality, including bounded retries) of the triage workflow.
 
 ---
 
@@ -78,6 +78,16 @@ name: debug                   # short well-known name — acceptable
 Apply common sense. A name like `pdf` or `commit` is universally understood as
 an action in context and needs no gerund form. The goal is to prefer names that
 read as "doing X" over names that read as "a thing that does X."
+
+Suffixes that name an **established tool category** are also acceptable in
+noun form: `-linter`, `-checker`, `-validator`, `-formatter`, `-bundler`,
+`-compiler`. These are conventions inherited from a broader ecosystem
+(`eslint`, `pylint`, `markdownlint`, `shellcheck`, `prettier`, `webpack`),
+where the noun form *is* the action signal. Names like `agent-skill-linter`,
+`config-validator`, or `import-checker` fall in this category and should not
+be flagged. The test is whether the suffix names a recognized tool genre or
+just a generic agent — `-processor`, `-handler`, `-manager` remain
+flag-worthy because they describe no specific action.
 
 ---
 
@@ -280,3 +290,140 @@ needs to tell the agent to read the tool's actual output at least once. "If the
 tool reported any errors, fix them now" is sufficient. The failure case is a
 workflow that treats every tool invocation as a black box and never prompts the
 agent to look at what was produced.
+
+---
+
+## Rule 26 — Bounded retry and named fallback
+
+**Question:** If the workflow loops on tool output, does it bound the retries
+and name what happens when the cap is hit?
+
+### Should flag
+
+A workflow that tells the agent to retry or iterate with no exit condition:
+
+~~~markdown
+### Step 3 — Run the integration test
+
+```bash
+pytest tests/integration
+```
+
+If the test fails, fix the underlying issue and re-run. Repeat until all
+tests pass.
+~~~
+
+~~~markdown
+### Step 2 — Wait for the deployment to finish
+
+Poll the status endpoint until the deployment reports `ready`. If it returns
+`pending`, wait and retry.
+~~~
+
+An agent following either of these can burn tokens or wall time indefinitely
+because the workflow never names a cap or an escape hatch.
+
+### Should not flag
+
+A workflow that names the cap and the fallback explicitly:
+
+~~~markdown
+### Step 3 — Run the integration test
+
+```bash
+pytest tests/integration
+```
+
+Fix the failures and re-run. If the same failure occurs on three consecutive
+runs, stop and ask the user — do not keep retrying.
+~~~
+
+~~~markdown
+### Step 2 — Wait for the deployment to finish
+
+Poll the status endpoint every 30 seconds, up to 10 minutes. If it has not
+reached `ready` by then, report the last status to the user and stop.
+~~~
+
+A step that runs a tool *once* and acts on the result needs no retry cap —
+this rule applies only to steps that loop, retry, or wait.
+
+### Judgment call
+
+The cap does not have to be a number — "until the user confirms", "until the
+build URL changes", or "until the file appears" are also valid termination
+conditions, because each names a concrete event the agent can observe. The
+failure case is open-ended language ("repeat until it works", "keep trying",
+"iterate until correct") that gives the agent no way to recognize when it
+should stop and hand back control.
+
+---
+
+## Rule 27 — Conditional sections name an observable trigger
+
+**Question:** When a section is conditional ("After…", "Once…", "If…"), does
+its heading or first line name a concrete event the agent can observe?
+
+### Should flag
+
+A conditional heading whose trigger is vague or subjective:
+
+```markdown
+## After reviewing the output
+
+(instructions for what to do next)
+```
+
+```markdown
+## Once you understand the context
+
+(detailed action steps)
+```
+
+```markdown
+## If something seems off
+
+(troubleshooting steps)
+```
+
+An agent cannot tell when "reviewing", "understanding", or "seeming off" is
+complete, so it cannot tell when to enter the section.
+
+### Should not flag
+
+A conditional heading tied to an observable event:
+
+```markdown
+## After `skill-lint check` reports zero errors
+
+(instructions for the next stage)
+```
+
+```markdown
+## Once the build URL changes to green
+
+(post-build actions)
+```
+
+```markdown
+## If the tool exits with code 2
+
+(specific troubleshooting steps)
+```
+
+```markdown
+## Step 3 — Apply fixes
+```
+
+`Step N` and `Phase N` headings are sequenced by position, not by external
+trigger, and are exempt from this rule — they belong to Rule 16's progressive-
+disclosure check instead.
+
+### Judgment call
+
+The test is operational: can the agent know, *without consulting the user*,
+whether the trigger has fired? "After the deploy finishes" passes if the
+workflow has already shown the agent how to observe the deploy status; it
+fails if "the deploy finishes" is left undefined. Borrow the language the
+workflow already uses for its tools and outputs — that vocabulary is what
+makes a trigger observable.

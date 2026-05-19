@@ -89,3 +89,29 @@ The design principle is symmetric with the removals: Rule 20 fires only when the
 structural threshold (≥ 3 steps) is met, preventing false positives on stub
 SKILL.md files. The `Ask:` marker is the canonical signal; `read … and ask` is
 the only accepted variant, keeping the pattern tight.
+
+## Amendment (2026-05-19)
+
+Two further semantic rules — 26 and 27 — were added to `references/semantic-rules.md`
+without corresponding Python implementations, extending Step 9 and Step 8 of the
+triage workflow respectively:
+
+- **Rule 26 (Step 9, third sub-question)** — Workflows that loop on tool output
+  must bound the retries and name the fallback. The failure shape is unbounded
+  token spend; no mechanical proxy reliably distinguishes a legitimate "retry
+  until passing" from one that should stop after N attempts.
+- **Rule 27 (Step 8, second sub-question)** — Conditional sections ("After…",
+  "Once…", "If…") must name an observable trigger event. Distinguishing vague
+  prose triggers from observable ones is read-the-text judgment by nature.
+
+The current set of intentionally-not-automated rules is enumerated in
+`references/semantic-rules.md` itself, which is the single source of truth. The
+semantic-review range in SKILL.md now covers **Steps 5–9** (Step 9 was added
+later in the workflow's evolution; Steps 5–8 were established in the original
+decision above).
+
+The two new rules follow the same principle as the original removals: when a
+mechanical proxy would have a high false-positive rate, or when the signal is
+inherently judgment-based, encode the rule as a Step-N sub-question with
+should-flag / should-not-flag examples in `references/semantic-rules.md`
+instead of writing Python.
