@@ -1206,3 +1206,71 @@ class TestPluginFixerTemplates:
         # Must NOT contain plugin-only markers:
         assert "PEP 723" not in readme
         assert "skills/<skill-name>/scripts/" not in readme
+
+
+# ---------------------------------------------------------------------------
+# Rule 28: Plain prose in human-facing documents
+# ---------------------------------------------------------------------------
+
+
+class TestRule28:
+    @pytest.fixture(scope="class")
+    def findings(self):
+        return results_for_rule(lint_skill(FIXTURES / "fluffy-readme"), 28)
+
+    def test_all_findings_are_info_and_unfixable_on_readme(self, findings):
+        assert findings, "Rule 28 should fire on the fluffy README"
+        assert {r.severity for r in findings} == {Severity.INFO}
+        assert all(not r.fixable and r.file == "README.md" for r in findings)
+
+    def test_superlatives_listed_once_with_line_numbers(self, findings):
+        msgs = [r.message for r in findings if "superlative" in r.message.lower()]
+        assert len(msgs) == 1
+        for word in ("powerful", "blazing", "effortless", "best-in-class", "cutting-edge"):
+            assert word in msgs[0]
+        assert "line 13" in msgs[0]
+
+    def test_throat_clearing_opener_and_buried_lead_each_reported(self, findings):
+        messages = " ".join(r.message for r in findings)
+        assert "Welcome to" in messages
+        assert "buried" in messages.lower()
+
+    def test_long_sentences_counted_once_across_languages(self, findings):
+        msgs = [r.message for r in findings if "long sentence" in r.message.lower()]
+        assert len(msgs) == 1
+        assert "2 " in msgs[0] and "line 15" in msgs[0]
+
+    def test_long_paragraph_reported(self, findings):
+        msgs = [r.message for r in findings if "long paragraph" in r.message.lower()]
+        assert len(msgs) == 1 and "line 13" in msgs[0]
+
+    def test_em_dash_paragraph_reported(self, findings):
+        msgs = [r.message for r in findings if "em-dash" in r.message.lower()]
+        assert len(msgs) == 1 and "line 19" in msgs[0]
+
+    def test_every_message_points_at_sibling_skill(self, findings):
+        assert all("critiquing-articles" in r.message for r in findings)
+
+    def test_user_guide_is_also_checked(self, tmp_path):
+        shutil.copytree(FIXTURES / "valid-skill", tmp_path / "s")
+        (tmp_path / "s" / "USER_GUIDE.md").write_text("# Guide\n\nA powerful guide.\n")
+        files = {r.file for r in results_for_rule(lint_skill(tmp_path / "s"), 28)}
+        assert files == {"USER_GUIDE.md"}
+
+    def test_nested_docs_guide_is_also_checked(self, tmp_path):
+        shutil.copytree(FIXTURES / "valid-skill", tmp_path / "s")
+        (tmp_path / "s" / "docs").mkdir()
+        (tmp_path / "s" / "docs" / "guide.md").write_text("# Guide\n\nA powerful guide.\n")
+        files = {r.file for r in results_for_rule(lint_skill(tmp_path / "s"), 28)}
+        assert files == {"docs/guide.md"}
+
+    def test_valid_readmes_are_clean(self):
+        assert results_for_rule(lint_skill(FIXTURES / "valid-skill"), 28) == []
+        assert results_for_rule(lint_skill(FIXTURES / "valid-skill-subdir" / "skill"), 28) == []
+
+    def test_plugin_mode_reports_readme_once(self, tmp_path):
+        shutil.copytree(FIXTURES / "valid-plugin", tmp_path / "p")
+        (tmp_path / "p" / "README.md").write_text("# P\n\nA powerful plugin.\n")
+        from linter import lint_plugin
+        findings = results_for_rule(lint_plugin(tmp_path / "p"), 28)
+        assert len(findings) == 1 and findings[0].file == "README.md"

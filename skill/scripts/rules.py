@@ -12,6 +12,7 @@ from pathlib import Path
 
 import yaml
 
+import prose
 from models import LintResult, Severity
 
 PLUGIN_MANIFEST_RELPATH = Path(".claude-plugin") / "plugin.json"
@@ -990,4 +991,72 @@ def check_local_package_deps(plugin_root: Path) -> list[LintResult]:
                 ),
                 file=str(rel),
             ))
+    return results
+
+
+# ---------------------------------------------------------------------------
+# Rule 28: Plain prose in human-facing documents
+# ---------------------------------------------------------------------------
+# Mechanical signals only. AI-flavor detection is delegated to the sibling
+# `critiquing-articles` skill by the semantic step (see ADR-0005).
+
+HUMAN_FACING_DOCS = ("README.md", "USER_GUIDE.md", "USAGE.md", "GUIDE.md", "docs/guide.md")
+
+_SIBLING_HINT = (
+    "For a deeper AI-flavor audit run the critiquing-articles skill "
+    "(npx skills add William-Yeh/critiquing-articles)."
+)
+
+
+def _counted_message(name: str, lines: list[int], nouns: tuple[str, str], detail: str | None) -> str:
+    """'README.md has 2 long sentences (detail); first at line 15.'"""
+    n = len(lines)
+    noun = nouns[0] if n == 1 else nouns[1]
+    suffix = f" ({detail})" if detail else ""
+    return f"{name} has {n} {noun}{suffix}; first at line {lines[0]}."
+
+
+def _plain_prose_messages(name: str, report: prose.ProseReport) -> list[str]:
+    """Turn a ProseReport into human-readable messages, one per signal that fired."""
+    msgs: list[str] = []
+    if report.superlatives:
+        hits = ", ".join(f"{w} (line {ln})" for ln, w in report.superlatives)
+        msgs.append(
+            f"{name} uses marketing superlatives in prose: {hits}. "
+            "Say what the tool does instead."
+        )
+    if prose.LeadStatus.MISSING in report.lead:
+        msgs.append(f"{name} has no prose paragraph saying what the skill does and who it is for.")
+    if prose.LeadStatus.BURIED in report.lead:
+        msgs.append(
+            f"{name} lead is buried: more than {prose.MAX_LINES_BEFORE_LEAD} non-blank lines "
+            "sit between the title and the first prose paragraph."
+        )
+    if prose.LeadStatus.THROAT_CLEARING in report.lead:
+        msgs.append(
+            f"{name} lead opens with throat-clearing ({report.lead_text!r}). "
+            "Start with what the skill does and who it is for."
+        )
+    counted = (
+        (report.long_sentences, ("long sentence", "long sentences"),
+         f"over {prose.MAX_WORDS} words, or {prose.MAX_CJK_CHARS} CJK characters"),
+        (report.long_paragraphs, ("long paragraph", "long paragraphs"),
+         f"over {prose.MAX_SENTENCES_PER_PARAGRAPH} sentences"),
+        (report.dash_heavy, ("paragraph with 3+ em-dashes", "paragraphs with 3+ em-dashes"), None),
+    )
+    for lines, nouns, detail in counted:
+        if lines:
+            msgs.append(_counted_message(name, lines, nouns, detail))
+    return [f"{m} {_SIBLING_HINT}" for m in msgs]
+
+
+def check_plain_prose(skill_dir: Path) -> list[LintResult]:
+    """Rule 28: human-facing documents read as plain prose (Info, not fixable)."""
+    results: list[LintResult] = []
+    for name in HUMAN_FACING_DOCS:
+        text = _read_text(_repo_path(skill_dir, name))
+        if text is None:
+            continue
+        for message in _plain_prose_messages(name, prose.analyze(text)):
+            results.append(LintResult(rule_id=28, severity=Severity.INFO, message=message, file=name))
     return results

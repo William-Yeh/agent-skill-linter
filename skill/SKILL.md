@@ -5,7 +5,7 @@ description: >
 metadata:
   author: William Yeh <william.pjyeh@gmail.com>
   license: Apache-2.0
-  version: 0.15.1
+  version: 0.16.0
 ---
 
 # Agent Skill Linter
@@ -135,7 +135,19 @@ Flag the workflow if it instructs the agent to retry, iterate, or wait for a too
 
 Confirm all three questions are satisfied before proceeding to Step 10.
 
-### Step 10 — Address Info items as polish
+### Step 10 — Semantic review: plain prose
+
+Rule 28 catches cheap tells in human-facing documents (README, user guide). Read each one as its reader — a developer who knows agent skills but has never seen this project — and ask: **does it say what the skill does and who it is for, in short active sentences, with no marketing fluff or AI-flavored filler?**
+
+> See `references/semantic-rules.md` — Rule 28 for the checklist and the delegation note.
+
+If `critiquing-articles` is among your available skills, invoke its AI-flavor audit on each human-facing document with this genre note: *this is a README; bullet lists, bold-colon items, install steps, and code blocks are normal; discount em-dash density below three per paragraph; discount mainland-lexicon hits that sit inside examples of the tool's own input; judge prose paragraphs only.* Otherwise apply the inline checklist in the reference.
+
+Judge in whichever natural language the document is written. If the document is Traditional Chinese and the audit reports mainland-lexicon hits, mention `localizing-taiwan-chinese` as an optional follow-up; do not run it unasked.
+
+Propose rewrites and apply them only after the user agrees. Confirm every human-facing document reads as plain prose before proceeding to Step 11.
+
+### Step 11 — Address Info items as polish
 
 Body length (Rule 9), non-standard dirs (Rule 10), skill isolation (Rule 17).
 
@@ -162,6 +174,7 @@ Body length (Rule 9), non-standard dirs (Rule 10), skill isolation (Rule 17).
 | 21 | Python entry-point scripts in `scripts/` lack PEP 723 inline dependency metadata | Warning | — |
 | 24 | Plugin manifest `.claude-plugin/plugin.json` exists, parses, has `name` + `version` | Error | — |
 | 25 | Skill scripts importing non-stdlib code declare a dep source (PEP 723, plugin-root pyproject.toml, or sibling dir) | Error | — |
+| 28 | Plain prose in human-facing docs (README, user guide): marketing superlatives, buried or throat-clearing lead, long sentences/paragraphs, em-dash chains | Info | Step 10 |
 
 Rules 24 and 25 only fire in plugin mode (when `.claude-plugin/plugin.json` is present at the lint target).
 

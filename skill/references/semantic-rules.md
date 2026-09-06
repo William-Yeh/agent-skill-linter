@@ -2,8 +2,9 @@
 
 Rules that require agent judgment rather than mechanical detection. Use these
 examples during Step 5 (CSO signal), Step 7 (content overlap), Step 8
-(progressive disclosure, including trigger clarity), and Step 9 (multi-step
-workflow quality, including bounded retries) of the triage workflow.
+(progressive disclosure, including trigger clarity), Step 9 (multi-step
+workflow quality, including bounded retries), and Step 10 (plain prose in
+human-facing documents) of the triage workflow.
 
 ---
 
@@ -427,3 +428,77 @@ workflow has already shown the agent how to observe the deploy status; it
 fails if "the deploy finishes" is left undefined. Borrow the language the
 workflow already uses for its tools and outputs — that vocabulary is what
 makes a trigger observable.
+
+---
+
+## Rule 28 — Human-facing documents read as plain prose
+
+**Question:** Would a developer who knows agent skills but has never seen this
+project understand, from the README alone, what it does and who it is for —
+without wading through fluff?
+
+The mechanical Rule 28 only catches cheap tells: marketing superlatives, a
+buried or throat-clearing lead, over-long sentences and paragraphs, em-dash
+chains. This step owns the judgment. Applies to README plus any user guide
+(`USER_GUIDE.md`, `USAGE.md`, `GUIDE.md`, `docs/guide.md`), in whatever
+natural language they are written.
+
+### Delegation
+
+If `critiquing-articles` is available, run its AI-flavor audit (mode
+"AI 味檢查") on each document. Pass this genre note, because that skill is
+tuned for essays: *this is a README; bullet lists, bold-colon items, install
+steps, and code blocks are normal here; discount em-dash density below three
+per paragraph; discount mainland-lexicon hits that sit inside examples of the
+tool's own input; judge prose paragraphs only.* Cite its layer summary and use
+its counteraction moves when proposing rewrites.
+
+`localizing-taiwan-chinese` is a separate concern (Taiwan localization, not
+plainness). Mention it only when the document is Traditional Chinese and the
+audit reports mainland-lexicon hits.
+
+### Inline checklist (when no sibling skill is available)
+
+- **Lexical** — stock filler: "delve", "leverage", "seamless", "robust",
+  "it's worth noting", "in today's … landscape"; 值得注意的是、深入探討、
+  在這個…的時代. Zero of these is the target; one is a smell, three is a flag.
+- **Construction** — "not just X but Y" when nobody assumed X-only;
+  participial tails (", highlighting…"); every paragraph opening on a
+  transition word (Moreover / 此外 / 首先).
+- **Structure** — every paragraph the same length; no concrete noun, number,
+  or example anywhere; bullets used where the items have a causal relation
+  that a sentence should state.
+- **Tone** — hedges that guard no real risk; a closing line that restates the
+  body; enthusiasm applied evenly to every feature.
+
+### Should flag
+
+```markdown
+# my-skill
+
+Welcome to the repository for my-skill, a powerful and seamless solution that
+leverages cutting-edge techniques to effortlessly delve into your workflow.
+```
+
+Throat-clearing opener, three superlatives, two filler words, and the reader
+still does not know what it does.
+
+### Should not flag
+
+```markdown
+# my-skill
+
+Renames photo files by their EXIF shot date. For people with a camera roll
+full of `IMG_1234.jpg`.
+```
+
+Two sentences, one verb each, says what and for whom. A single em-dash or a
+single "robust" elsewhere in the document is not a finding on its own.
+
+### Judgment call
+
+Density over presence: one tell in an otherwise plain document is fine. Flag
+when tells cluster, or when the lead paragraph leaves the reader unable to
+say in one sentence what the skill does. Propose the rewrite; apply it only
+after the user agrees. Keep the author's voice — the goal is plainness, not a
+different generic voice.

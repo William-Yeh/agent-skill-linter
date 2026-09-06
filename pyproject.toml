@@ -14,6 +14,7 @@ dev = [
     "click",
     "pyyaml",
     "rich",
+    "hypothesis",
 ]
 
 [tool.ruff]

@@ -30,7 +30,7 @@ from rich.table import Table
 from linter import detect_layout, lint_plugin, lint_skill
 from models import LintResult, Severity
 
-__version__ = "0.10.0"
+__version__ = "0.16.0"
 
 SEVERITY_STYLE = {
     Severity.ERROR: "bold red",

@@ -34,11 +34,9 @@ Copy the skill directory to your agent's skill folder:
 | Agent | Directory |
 |-------|-----------|
 | Claude Code | `~/.claude/skills/` |
-| Cursor | `.cursor/skills/` |
-| Gemini CLI | `.gemini/skills/` |
-| Amp | `.amp/skills/` |
-| Roo Code | `.roo/skills/` |
-| Copilot | `.github/skills/` |
+| Codex | `.agents/skills/` |
+| Pi | `.pi/skills/` |
+| oh-my-pi | `.omp/skills/` |
 
 ### As a CLI tool
 

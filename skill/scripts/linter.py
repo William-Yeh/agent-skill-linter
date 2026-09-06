@@ -42,6 +42,7 @@ def lint_skill(path: str | Path) -> list[LintResult]:
         rules.check_readme_tier_in_skill,
         rules.check_triage_semantic_balance,
         rules.check_pep723_entry_points,
+        rules.check_plain_prose,
     ]
     for fn in rule_fns:
         results.extend(fn(skill_dir))
@@ -72,7 +73,7 @@ def lint_plugin(path: str | Path) -> list[LintResult]:
     # Per-skill findings whose `file` resolves to a shared plugin-root artifact
     # (README.md, LICENSE, .github/workflows/...) would otherwise be reported once
     # per skill. Dedupe across skills so each plugin-scoped issue surfaces once.
-    plugin_scoped_files = {"README.md", "LICENSE", "pyproject.toml"}
+    plugin_scoped_files = {"LICENSE", "pyproject.toml", *rules.HUMAN_FACING_DOCS}
     seen_plugin_scoped: set[tuple[int, str | None, str]] = set()
 
     for skill_dir in sorted(skills_dir.iterdir()):
