@@ -102,7 +102,26 @@ def lint_plugin(path: str | Path) -> list[LintResult]:
     return results
 
 
+def resolve_target(path: str | Path) -> tuple[str, Path]:
+    """Return `(layout, directory to lint)` for a user-supplied path.
+
+    Layout is "plugin" when the plugin manifest is present, else "skill". A
+    skill target whose SKILL.md lives only in a `skill/` subdirectory (the
+    ADR-0001 layout) resolves to that subdirectory, so pointing the CLI at the
+    repo root lints the skill instead of reporting SKILL.md missing. A SKILL.md
+    at the target itself always wins (legacy root layout).
+    """
+    from skills_ref.parser import find_skill_md
+
+    target = Path(path).resolve()
+    if (target / ".claude-plugin" / "plugin.json").is_file():
+        return "plugin", target
+    subdir = target / "skill"
+    if find_skill_md(target) is None and find_skill_md(subdir) is not None:
+        return "skill", subdir
+    return "skill", target
+
+
 def detect_layout(path: str | Path) -> str:
     """Return 'plugin' if `path` is a plugin root, else 'skill'."""
-    target = Path(path).resolve()
-    return "plugin" if (target / ".claude-plugin" / "plugin.json").is_file() else "skill"
+    return resolve_target(path)[0]

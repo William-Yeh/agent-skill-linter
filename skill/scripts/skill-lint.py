@@ -27,10 +27,10 @@ import click
 from rich.console import Console
 from rich.table import Table
 
-from linter import detect_layout, lint_plugin, lint_skill
+from linter import lint_plugin, lint_skill, resolve_target
 from models import LintResult, Severity
 
-__version__ = "0.16.0"
+__version__ = "0.17.0"
 
 SEVERITY_STYLE = {
     Severity.ERROR: "bold red",
@@ -56,20 +56,26 @@ def main():
     help="Output format.",
 )
 def check(path: str, fix: bool, fmt: str):
-    """Check a skill directory or plugin root for issues.
+    """Check a skill directory, a skill repo root, or a plugin root for issues.
 
     Auto-detects: if `<path>/.claude-plugin/plugin.json` exists, runs in plugin
-    mode (validates manifest + iterates `skills/*/`). Otherwise runs in
-    single-skill mode against `<path>` directly.
+    mode (validates manifest + iterates `skills/*/`). If `<path>` has no
+    SKILL.md but `<path>/skill/SKILL.md` exists, lints that subdirectory and
+    says so on stderr. Otherwise runs in single-skill mode against `<path>`.
     """
-    layout = detect_layout(path)
+    layout, target = resolve_target(path)
+    if target != Path(path).resolve():
+        click.echo(
+            f"No SKILL.md at {path}; linting its skill/ subdirectory {target} instead.",
+            err=True,
+        )
     runner = lint_plugin if layout == "plugin" else lint_skill
-    results = runner(path)
+    results = runner(target)
 
     if fix:
         from fixers import apply_fixes
-        apply_fixes(path, results)
-        results = runner(path)
+        apply_fixes(target, results)
+        results = runner(target)
 
     if fmt == "json":
         _print_json(results)

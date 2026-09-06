@@ -5,7 +5,7 @@ description: >
 metadata:
   author: William Yeh <william.pjyeh@gmail.com>
   license: Apache-2.0
-  version: 0.16.0
+  version: 0.17.0
 ---
 
 # Agent Skill Linter
@@ -16,7 +16,7 @@ Checks agent skills for spec compliance and publishing readiness.
 
 Two layouts are supported, auto-detected by presence of `.claude-plugin/plugin.json` at the target:
 
-- **Single skill** — lint target is the `skill/` subdir (or repo root for legacy repos).
+- **Single skill** — lint target is the `skill/` subdir (or repo root for legacy repos). Pointing at the repo root of a `skill/` layout is fine: the linter redirects to `skill/` and says so on stderr.
 - **Plugin** — lint target is the plugin root; manifest + each `skills/<name>/` checked.
 
 > See `references/layouts.md` for layout diagrams, file-by-file conventions, and per-mode detection rules.
@@ -35,7 +35,7 @@ Review the output for errors and warnings; confirm the full picture before proce
 
 ### Step 2 — Fix Errors first
 
-**Rule 1** (SKILL.md spec compliance) blocks publishing. Fix before anything else.
+**Rule 1** errors (SKILL.md spec compliance) block publishing. Fix before anything else. Its Claude Code extension-field finding is a warning, handled in Step 4.
 
 ### Step 3 — Auto-fix Warnings
 
@@ -49,7 +49,7 @@ Confirm no auto-fixable warnings remain before continuing to Step 4.
 
 ### Step 4 — Resolve remaining Warnings manually
 
-CSO description prefix (Rule 11), Python invocations (Rule 13), README-tier sections in SKILL.md (Rule 19) — see the rule table below.
+CSO description prefix (Rule 11), Python invocations (Rule 13), README-tier sections in SKILL.md (Rule 19), Claude Code extension fields in frontmatter (Rule 1 warning: keep them if the skill is Claude Code-only, drop them to publish cross-platform) — see the rule table below.
 
 Confirm all remaining warnings are resolved (or explicitly accepted) before proceeding to Step 5.
 
@@ -155,7 +155,7 @@ Body length (Rule 9), non-standard dirs (Rule 10), skill isolation (Rule 17).
 
 | # | Rule | Severity | Auto-fix |
 |---|------|----------|----------|
-| 1 | SKILL.md spec compliance (via skills-ref) | Error | — |
+| 1 | SKILL.md spec compliance (via skills-ref); Claude Code extension fields (`disable-model-invocation`, `model`, `hooks`…) warn instead | Error / Warning | — |
 | 2 | LICENSE exists, Apache-2.0 or MIT, current year | Warning | Partial |
 | 3 | `metadata.author` in SKILL.md frontmatter | Warning | Yes |
 | 4 | README badges (CI, license, Agent Skills) | Warning | Yes |
@@ -168,7 +168,7 @@ Body length (Rule 9), non-standard dirs (Rule 10), skill isolation (Rule 17).
 | 13 | Python invocation consistency (`uv run python` in uv projects) | Warning | — |
 | 14 | Progressive disclosure: embedded templates (4-backtick fences) → `references/` | Warning | Yes |
 | 15 | Progressive disclosure: reference-tier headings (Troubleshooting, FAQ, Advanced…) → `references/` | Warning | Yes + Step 8 |
-| 17 | Skill isolation: SKILL.md at repo root alongside non-skill artifacts | Info | — |
+| 17 | Skill isolation: SKILL.md at repo root alongside non-skill artifacts (silent once SKILL.md is in `skill/`) | Info | — |
 | 19 | Division of labor: README-tier sections (Installation, Features, Getting Started…) in SKILL.md | Warning | — |
 | 20 | Triage workflow has 3+ steps but no semantic review step (e.g. "Ask: does it…") | Info | Step 5–9 |
 | 21 | Python entry-point scripts in `scripts/` lack PEP 723 inline dependency metadata | Warning | — |
@@ -181,7 +181,7 @@ Rules 24 and 25 only fire in plugin mode (when `.claude-plugin/plugin.json` is p
 ## CLI Reference
 
 ```bash
-./scripts/skill-lint.py check .                            # Auto-detect: skill or plugin
+./scripts/skill-lint.py check .                            # Auto-detect: skill, skill/ subdir, or plugin
 ./scripts/skill-lint.py check ./my-skill --fix             # Single-skill, auto-fix
 ./scripts/skill-lint.py check ./my-plugin                  # Plugin: validates manifest +
                                                            # iterates skills/<name>/

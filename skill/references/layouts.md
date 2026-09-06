@@ -23,7 +23,7 @@ my-skill/
     └── workflows/
 ```
 
-The **lint target** is the `skill/` subdirectory (or repo root for older repos with no `skill/` dir).
+The **lint target** is the `skill/` subdirectory (or repo root for older repos with no `skill/` dir). Pointing at the repo root of a `skill/` layout also works: the linter finds `skill/SKILL.md`, lints that directory, and says so on stderr. A SKILL.md at the root always wins.
 
 ## Plugin (installed via `/plugin install`)
 

@@ -6,6 +6,7 @@ import shutil
 from pathlib import Path
 
 import pytest
+from hypothesis import given, strategies as st
 
 from linter import lint_skill
 from models import Severity
@@ -126,6 +127,59 @@ class TestRule1:
     def test_valid_skill_md(self):
         results = rules.check_spec_compliance(FIXTURES / "valid-skill")
         assert results == []
+
+    # -- Claude Code extension fields vs. the Agent Skills spec ------------
+
+    def _skill_with(self, path: Path, extra_frontmatter: str) -> None:
+        path.mkdir(exist_ok=True)
+        (path / "SKILL.md").write_text(
+            f"---\nname: t\ndescription: Use when.\n{extra_frontmatter}---\n\n# T\n",
+            encoding="utf-8",
+        )
+
+    def test_claude_code_extension_field_warns_not_errors(self, tmp_path):
+        """`disable-model-invocation` is documented by Claude Code but absent from
+        the Agent Skills spec: a warning, so the skill still passes, that tells
+        the author the field will not travel to other runtimes."""
+        self._skill_with(tmp_path, "disable-model-invocation: true\n")
+        results = rules.check_spec_compliance(tmp_path)
+        assert [r.severity for r in results] == [Severity.WARNING]
+        assert "disable-model-invocation" in results[0].message
+
+    def test_unknown_field_still_errors(self, tmp_path):
+        self._skill_with(tmp_path, "made-up-field: 1\n")
+        results = rules.check_spec_compliance(tmp_path)
+        assert [r.severity for r in results] == [Severity.ERROR]
+        assert "made-up-field" in results[0].message
+
+    def test_extension_and_unknown_fields_are_reported_separately(self, tmp_path):
+        self._skill_with(tmp_path, "made-up-field: 1\nmodel: opus\n")
+        results = rules.check_spec_compliance(tmp_path)
+        by_severity = {r.severity: r.message for r in results}
+        assert set(by_severity) == {Severity.ERROR, Severity.WARNING}
+        assert "made-up-field" in by_severity[Severity.ERROR]
+        assert "model" not in by_severity[Severity.ERROR]
+        assert "model" in by_severity[Severity.WARNING]
+
+    @given(fields=st.sets(
+        st.sampled_from(sorted(rules.CLAUDE_CODE_FRONTMATTER_EXTENSIONS)), min_size=1
+    ))
+    def test_any_extension_subset_yields_one_warning_naming_each(self, tmp_path_factory, fields):
+        skill_dir = tmp_path_factory.mktemp("skill")
+        self._skill_with(skill_dir, "".join(f"{f}: x\n" for f in sorted(fields)))
+        results = rules.check_spec_compliance(skill_dir)
+        assert [r.severity for r in results] == [Severity.WARNING]
+        assert all(f in results[0].message for f in fields)
+
+    def test_dir_name_check_only_at_repo_root(self, tmp_path):
+        """Characterisation of ADR-0001: a name/directory mismatch is an error
+        when the skill sits at a .git root, and ignored for a subdir skill."""
+        self._skill_with(tmp_path, "")  # name: t; tmp_path.name is not "t"
+        assert rules.check_spec_compliance(tmp_path) == []
+        (tmp_path / ".git").mkdir()
+        results = rules.check_spec_compliance(tmp_path)
+        assert [r.severity for r in results] == [Severity.ERROR]
+        assert "Directory name" in results[0].message
 
 
 # ---------------------------------------------------------------------------
@@ -701,6 +755,18 @@ class TestRule17:
         results = rules.check_skill_isolation(tmp_path)
         assert results == []
 
+    def test_skill_md_only_in_subdir_no_flag(self, tmp_path):
+        """Repo root whose SKILL.md already lives in skill/ — the rule's premise
+        ("SKILL.md is at repo root") is false, so it must not fire even though
+        non-skill artifacts sit at the root."""
+        (tmp_path / ".git").mkdir()
+        (tmp_path / "skill").mkdir()
+        self._make_skill(tmp_path / "skill")
+        (tmp_path / "README.md").write_text("# hi", encoding="utf-8")
+        (tmp_path / "LICENSE").write_text("MIT", encoding="utf-8")
+        results = rules.check_skill_isolation(tmp_path)
+        assert results == []
+
     def test_flags_human_artifacts(self, tmp_path):
         """README and LICENSE at repo root should trigger the rule."""
         (tmp_path / ".git").mkdir()
@@ -971,6 +1037,49 @@ class TestRule21:
     def test_valid_skill_passes(self):
         results = rules.check_pep723_entry_points(FIXTURES / "valid-skill")
         assert results == []
+
+
+# ---------------------------------------------------------------------------
+# Target resolution: repo root of a skill/ layout lints skill/
+# ---------------------------------------------------------------------------
+
+
+class TestResolveTarget:
+    """resolve_target(path) -> (layout, directory to lint).
+
+    A repo root whose SKILL.md lives only in skill/ (the ADR-0001 layout) must
+    resolve to that subdirectory, so `check <repo-root>` lints the skill instead
+    of reporting SKILL.md missing.
+    """
+
+    def test_subdir_layout_redirects_to_skill_dir(self):
+        from linter import resolve_target
+        root = FIXTURES / "valid-skill-subdir"
+        assert resolve_target(root) == ("skill", (root / "skill").resolve())
+
+    def test_root_skill_stays_put(self):
+        from linter import resolve_target
+        root = FIXTURES / "valid-skill"
+        assert resolve_target(root) == ("skill", root.resolve())
+
+    def test_plugin_root_stays_put(self):
+        from linter import resolve_target
+        root = FIXTURES / "valid-plugin"
+        assert resolve_target(root) == ("plugin", root.resolve())
+
+    def test_root_skill_md_wins_over_subdir(self, tmp_path):
+        """Legacy root SKILL.md takes precedence; skill/ is then just a directory."""
+        from linter import resolve_target
+        fm = "---\nname: t\ndescription: Use when.\n---\n"
+        (tmp_path / "SKILL.md").write_text(fm, encoding="utf-8")
+        (tmp_path / "skill").mkdir()
+        (tmp_path / "skill" / "SKILL.md").write_text(fm, encoding="utf-8")
+        assert resolve_target(tmp_path) == ("skill", tmp_path.resolve())
+
+    def test_no_skill_md_anywhere_returns_target(self, tmp_path):
+        """Nothing to redirect to: return the target so Rule 1 reports the missing file."""
+        from linter import resolve_target
+        assert resolve_target(tmp_path) == ("skill", tmp_path.resolve())
 
 
 # ---------------------------------------------------------------------------

@@ -91,42 +91,72 @@ def _extract_section_content(text: str, heading_pattern: str) -> str | None:
     return rest[: end.start()] if end else rest
 
 
+# Frontmatter fields Claude Code documents for SKILL.md beyond the six Agent
+# Skills spec fields (name, description, license, compatibility, metadata,
+# allowed-tools). Other runtimes ignore them and claude.ai / Skills API uploads
+# reject them, so Rule 1 reports them as a warning rather than an error.
+# Source: https://code.claude.com/docs/en/skills
+CLAUDE_CODE_FRONTMATTER_EXTENSIONS = frozenset({
+    "when_to_use",
+    "argument-hint",
+    "arguments",
+    "disable-model-invocation",
+    "user-invocable",
+    "disallowed-tools",
+    "model",
+    "effort",
+    "context",
+    "agent",
+    "background",
+    "hooks",
+    "paths",
+    "shell",
+})
+
+
 # ---------------------------------------------------------------------------
 # Rule 1: SKILL.md spec compliance (via skills-ref)
 # ---------------------------------------------------------------------------
 
 def check_spec_compliance(skill_dir: Path) -> list[LintResult]:
-    from skills_ref import validate
     from skills_ref.validator import validate_metadata
     from skills_ref.parser import find_skill_md, parse_frontmatter
     from skills_ref.errors import ParseError
 
-    # When skill_dir is a subdir (not the repo root), skip the dir-name-match
-    # check: the installed directory name comes from SKILL.md 'name', not the
-    # source directory name.
-    if (skill_dir / ".git").exists():
-        errors = validate(skill_dir)
-    else:
-        skill_md = find_skill_md(skill_dir)
-        if skill_md is None:
-            errors = ["Missing required file: SKILL.md"]
-        else:
-            try:
-                content = skill_md.read_text(encoding="utf-8")
-                metadata, _ = parse_frontmatter(content)
-                errors = validate_metadata(metadata, skill_dir=None)
-            except ParseError as e:
-                errors = [str(e)]
+    def error(message: str) -> LintResult:
+        return LintResult(rule_id=1, severity=Severity.ERROR, message=message, file="SKILL.md")
 
-    return [
-        LintResult(
+    skill_md = find_skill_md(skill_dir)
+    if skill_md is None:
+        return [error("Missing required file: SKILL.md")]
+    try:
+        metadata, _ = parse_frontmatter(skill_md.read_text(encoding="utf-8"))
+    except ParseError as e:
+        return [error(str(e))]
+
+    # Claude Code extension fields are validated separately: they are not spec
+    # errors, but they do not travel beyond Claude Code either.
+    extensions = sorted(k for k in metadata if k in CLAUDE_CODE_FRONTMATTER_EXTENSIONS)
+    portable = {k: v for k, v in metadata.items() if k not in CLAUDE_CODE_FRONTMATTER_EXTENSIONS}
+
+    # The dir-name-match check applies only when skill_dir is the repo root
+    # (ADR-0001): for a subdir skill the installed directory name comes from
+    # SKILL.md 'name', not the source directory name.
+    name_check_dir = skill_dir if (skill_dir / ".git").exists() else None
+    results = [error(err) for err in validate_metadata(portable, skill_dir=name_check_dir)]
+
+    if extensions:
+        results.append(LintResult(
             rule_id=1,
-            severity=Severity.ERROR,
-            message=err,
+            severity=Severity.WARNING,
+            message=(
+                f"Claude Code extension fields in frontmatter: {', '.join(extensions)}. "
+                "Not in the Agent Skills spec: other runtimes ignore them and claude.ai "
+                "uploads reject them. Keep them if the skill is Claude Code-only."
+            ),
             file="SKILL.md",
-        )
-        for err in errors
-    ]
+        ))
+    return results
 
 
 # ---------------------------------------------------------------------------
@@ -764,8 +794,12 @@ def check_skill_isolation(skill_dir: Path) -> list[LintResult]:
     that agents never need. Moving SKILL.md (and references/) into a skill/
     subdirectory limits installation to only what agents require.
     """
+    from skills_ref.parser import find_skill_md
+
     if not (skill_dir / ".git").exists():
         return []  # not a repo root — already isolated or being tested directly
+    if find_skill_md(skill_dir) is None:
+        return []  # SKILL.md is not at the root (e.g. already in skill/) — premise is false
 
     found: list[str] = []
     for entry in sorted(skill_dir.iterdir()):

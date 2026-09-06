@@ -51,7 +51,7 @@ Requires [uv](https://docs.astral.sh/uv/). Exit code: 1 if errors, 0 otherwise.
 
 The linter checks ~20 rules across seven categories:
 
-- **Spec compliance** — SKILL.md frontmatter, required fields, version (Rule 1, Error)
+- **Spec compliance** — SKILL.md frontmatter, required fields, version (Rule 1, Error; Claude Code-only fields warn)
 - **Repo hygiene** — LICENSE, CI workflow, README sections, badges (Rules 2–7)
 - **Routing signal quality** — `description` prefix, gerund names (Rule 11, plus semantic Steps 5/6)
 - **Progressive disclosure** — body size, reference-tier headings moved to `references/` (Rules 9, 14, 15, plus semantic Step 8)
@@ -64,3 +64,7 @@ For the full rule list with severities and auto-fix status, see [`skill/SKILL.md
 ### Plugin layout
 
 When the lint target contains `.claude-plugin/plugin.json`, the linter switches to plugin mode: validates the manifest, checks each skill's script dependencies, and runs the per-skill rule pack across all `skills/<name>/` directories. Single-skill repos lint as before.
+
+### Repo root as target
+
+`skill-lint check .` from a repo that keeps its skill in `skill/` lints that subdirectory and says so on stderr. A SKILL.md at the root still wins, so legacy layouts are unchanged.
