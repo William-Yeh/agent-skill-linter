@@ -24,13 +24,12 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 
 import click
+from linter import lint_plugin, lint_skill, resolve_target
+from models import LintResult, Severity
 from rich.console import Console
 from rich.table import Table
 
-from linter import lint_plugin, lint_skill, resolve_target
-from models import LintResult, Severity
-
-__version__ = "0.17.0"
+__version__ = "0.17.1"
 
 SEVERITY_STYLE = {
     Severity.ERROR: "bold red",

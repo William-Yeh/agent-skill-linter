@@ -6,11 +6,11 @@ import shutil
 from pathlib import Path
 
 import pytest
-from hypothesis import given, strategies as st
-
+import rules
+from hypothesis import given
+from hypothesis import strategies as st
 from linter import lint_skill
 from models import Severity
-import rules
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -491,6 +491,28 @@ class TestFixIntegration:
         results = lint_skill(skill_dir)
         r5 = results_for_rule(results, 5)
         assert len(r5) == 0
+
+    def test_fix_ci_workflow_runs_linter_from_its_own_checkout(self, tmp_path):
+        """The generated lint job must not rely on a `skill-lint` command the target repo lacks."""
+        import yaml
+
+        shutil.copytree(FIXTURES / "no-ci", tmp_path / "skill", dirs_exist_ok=True)
+        skill_dir = tmp_path / "skill"
+
+        from fixers import fix_ci_workflow
+        from models import LintResult
+
+        fix_ci_workflow(skill_dir, LintResult(rule_id=5, severity=Severity.WARNING, message=""))
+
+        workflow = yaml.safe_load((skill_dir / ".github" / "workflows" / "ci.yml").read_text())
+        steps = workflow["jobs"]["lint"]["steps"]
+        linter_checkout = next(
+            s for s in steps
+            if s.get("with", {}).get("repository") == "William-Yeh/agent-skill-linter"
+        )
+        linter_dir = linter_checkout["with"]["path"]
+        runs = [s["run"] for s in steps if "run" in s]
+        assert runs == [f"uv run {linter_dir}/skill/scripts/skill-lint.py check ."]
 
 
 # ---------------------------------------------------------------------------

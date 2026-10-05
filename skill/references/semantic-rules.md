@@ -134,8 +134,8 @@ A short step section that gives essential context upfront:
 
 ### Judgment call
 
-Line count alone is not the criterion — the original Python threshold of 30 lines
-was a proxy for "too much to absorb upfront." Use content density: a 35-line
+Line count alone is not the criterion — the question is whether the section is
+too much to absorb upfront. Use content density: a 35-line
 section of dense checklists should move; a 35-line section of simple narrative
 probably should not. Ask: "would an agent skip this on a normal run and only
 read it when needed?"
@@ -455,7 +455,8 @@ its counteraction moves when proposing rewrites.
 
 `localizing-taiwan-chinese` is a separate concern (Taiwan localization, not
 plainness). Mention it only when the document is Traditional Chinese and the
-audit reports mainland-lexicon hits.
+audit reports mainland-lexicon hits, as an optional follow-up; do not run it
+unasked.
 
 ### Inline checklist (when no sibling skill is available)
 

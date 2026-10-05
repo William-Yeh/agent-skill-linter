@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from hypothesis import given, strategies as st
-
 import prose
+from hypothesis import given
+from hypothesis import strategies as st
 
 # Sentence bodies: printable text with no terminator characters and no leading/trailing space.
 _sentence_bodies = st.text(

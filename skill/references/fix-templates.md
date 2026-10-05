@@ -6,8 +6,7 @@ Two-mode coverage: each Rule 6 / Rule 7 entry has a **single-skill** variant
 and a **plugin** variant. The auto-fixer picks the right one based on whether
 `.claude-plugin/plugin.json` is present at the lint target. When applying
 manually, pick the variant that matches the layout you're shipping (see
-ADR-0001 in linter docs and ADR-0001 in `narrative-analysis` for layout
-distinctions).
+`references/layouts.md` for the two layouts).
 
 ---
 
@@ -74,8 +73,9 @@ uv sync --all-groups
 ## Rule 7 — Usage section (README.md)
 
 When fixing a missing or incomplete Usage section, use the variant that
-matches your layout. Both must include 3+ starter prompts and a CLI
-subsection (Rule 7 sub-checks 7.1 and 7.2).
+matches your layout. Rule 7 requires at least one starter prompt and a
+heading containing "CLI"; write three distinct prompts so Step 6 has a range
+to judge.
 
 ### Single-skill variant
 
@@ -93,10 +93,7 @@ After installing, try these prompts with your agent:
 You can also run the script directly:
 
 ```bash
-skill-lint check .                            # Lint repo-root skill
-skill-lint check ./my-skill                   # Lint a specific directory
-skill-lint check ./my-skill --fix             # Auto-fix fixable issues
-skill-lint check ./my-skill --format json     # JSON output for CI
+{skill-cli-name} <args>             # the target skill's own script, not this linter
 ```
 ````
 

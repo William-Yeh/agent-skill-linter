@@ -4,14 +4,13 @@ from __future__ import annotations
 
 import re
 import subprocess
+import time
 from collections import defaultdict
 from collections.abc import Callable
-from datetime import datetime
 from pathlib import Path
 
 import click
 import yaml
-
 from models import LintResult
 from rules import _REFERENCE_TIER_RE, _is_plugin_root, _repo_path
 
@@ -125,7 +124,7 @@ SOFTWARE.
 @_fixer(2)
 def fix_license(skill_dir: Path, result: LintResult) -> None:
     lic_path = _repo_path(skill_dir, "LICENSE")
-    year = str(datetime.now().year)
+    year = str(time.localtime().tm_year)
 
     if lic_path.is_file():
         # Just update the year
@@ -227,8 +226,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: William-Yeh/agent-skill-linter
+          path: .agent-skill-linter
       - uses: astral-sh/setup-uv@v6
-      - run: uv run skill-lint check .
+      - run: uv run .agent-skill-linter/skill/scripts/skill-lint.py check .
 
   validate:
     runs-on: ubuntu-latest
@@ -362,12 +365,12 @@ uv run skills/<skill-name>/scripts/<script>.py [options]
 
 
 _KEYWORD_FILE_MAP = [
-    (re.compile(r"troubleshoot|faq|common.issue", re.I), "troubleshooting"),
-    (re.compile(r"background|architecture|how.it.works", re.I), "background"),
-    (re.compile(r"glossary|terminolog", re.I), "glossary"),
-    (re.compile(r"advanced|edge.case", re.I), "advanced"),
-    (re.compile(r"example", re.I), "examples"),
-    (re.compile(r"changelog|history|version", re.I), "changelog"),
+    (re.compile(r"troubleshoot|faq|common.issue", re.IGNORECASE), "troubleshooting"),
+    (re.compile(r"background|architecture|how.it.works", re.IGNORECASE), "background"),
+    (re.compile(r"glossary|terminolog", re.IGNORECASE), "glossary"),
+    (re.compile(r"advanced|edge.case", re.IGNORECASE), "advanced"),
+    (re.compile(r"example", re.IGNORECASE), "examples"),
+    (re.compile(r"changelog|history|version", re.IGNORECASE), "changelog"),
 ]
 
 

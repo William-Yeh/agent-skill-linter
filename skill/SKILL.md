@@ -5,7 +5,7 @@ description: >
 metadata:
   author: William Yeh <william.pjyeh@gmail.com>
   license: Apache-2.0
-  version: 0.17.0
+  version: 0.17.1
 ---
 
 # Agent Skill Linter
@@ -36,6 +36,8 @@ Review the output for errors and warnings; confirm the full picture before proce
 ### Step 2 — Fix Errors first
 
 **Rule 1** errors (SKILL.md spec compliance) block publishing. Fix before anything else. Its Claude Code extension-field finding is a warning, handled in Step 4.
+
+Proceed to Step 3 only when a re-run of Step 1 reports no errors. If an error survives two fix attempts, stop and show the user the linter output.
 
 ### Step 3 — Auto-fix Warnings
 
@@ -141,9 +143,7 @@ Rule 28 catches cheap tells in human-facing documents (README, user guide). Read
 
 > See `references/semantic-rules.md` — Rule 28 for the checklist and the delegation note.
 
-If `critiquing-articles` is among your available skills, invoke its AI-flavor audit on each human-facing document with this genre note: *this is a README; bullet lists, bold-colon items, install steps, and code blocks are normal; discount em-dash density below three per paragraph; discount mainland-lexicon hits that sit inside examples of the tool's own input; judge prose paragraphs only.* Otherwise apply the inline checklist in the reference.
-
-Judge in whichever natural language the document is written. If the document is Traditional Chinese and the audit reports mainland-lexicon hits, mention `localizing-taiwan-chinese` as an optional follow-up; do not run it unasked.
+If `critiquing-articles` is available, delegate to its AI-flavor audit (genre note and fallback checklist in the reference).
 
 Propose rewrites and apply them only after the user agrees. Confirm every human-facing document reads as plain prose before proceeding to Step 11.
 
@@ -170,7 +170,7 @@ Body length (Rule 9), non-standard dirs (Rule 10), skill isolation (Rule 17).
 | 15 | Progressive disclosure: reference-tier headings (Troubleshooting, FAQ, Advanced…) → `references/` | Warning | Yes + Step 8 |
 | 17 | Skill isolation: SKILL.md at repo root alongside non-skill artifacts (silent once SKILL.md is in `skill/`) | Info | — |
 | 19 | Division of labor: README-tier sections (Installation, Features, Getting Started…) in SKILL.md | Warning | — |
-| 20 | Triage workflow has 3+ steps but no semantic review step (e.g. "Ask: does it…") | Info | Step 5–9 |
+| 20 | Triage workflow has 3+ steps but no semantic review step (e.g. "Ask: does it…") | Info | Step 5–10 |
 | 21 | Python entry-point scripts in `scripts/` lack PEP 723 inline dependency metadata | Warning | — |
 | 24 | Plugin manifest `.claude-plugin/plugin.json` exists, parses, has `name` + `version` | Error | — |
 | 25 | Skill scripts importing non-stdlib code declare a dep source (PEP 723, plugin-root pyproject.toml, or sibling dir) | Error | — |

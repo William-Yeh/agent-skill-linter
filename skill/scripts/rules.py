@@ -6,13 +6,12 @@ import ast
 import json
 import re
 import sys
+import time
 import tomllib
-from datetime import datetime
 from pathlib import Path
 
-import yaml
-
 import prose
+import yaml
 from models import LintResult, Severity
 
 PLUGIN_MANIFEST_RELPATH = Path(".claude-plugin") / "plugin.json"
@@ -119,9 +118,9 @@ CLAUDE_CODE_FRONTMATTER_EXTENSIONS = frozenset({
 # ---------------------------------------------------------------------------
 
 def check_spec_compliance(skill_dir: Path) -> list[LintResult]:
-    from skills_ref.validator import validate_metadata
-    from skills_ref.parser import find_skill_md, parse_frontmatter
     from skills_ref.errors import ParseError
+    from skills_ref.parser import find_skill_md, parse_frontmatter
+    from skills_ref.validator import validate_metadata
 
     def error(message: str) -> LintResult:
         return LintResult(rule_id=1, severity=Severity.ERROR, message=message, file="SKILL.md")
@@ -191,7 +190,7 @@ def check_license(skill_dir: Path) -> list[LintResult]:
             file="LICENSE",
         ))
 
-    current_year = str(datetime.now().year)
+    current_year = str(time.localtime().tm_year)
     if current_year not in lic:
         results.append(LintResult(
             rule_id=2,
@@ -949,9 +948,8 @@ def _script_imports(text: str) -> set[str]:
         if isinstance(node, ast.Import):
             for alias in node.names:
                 names.add(alias.name.split(".", 1)[0])
-        elif isinstance(node, ast.ImportFrom):
-            if node.level == 0 and node.module:
-                names.add(node.module.split(".", 1)[0])
+        elif isinstance(node, ast.ImportFrom) and node.level == 0 and node.module:
+            names.add(node.module.split(".", 1)[0])
     return names
 
 

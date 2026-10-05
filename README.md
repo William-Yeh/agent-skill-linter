@@ -30,7 +30,7 @@ Copy the `skill/` directory to your agent's skill folder as `agent-skill-linter`
 
 After installing, try these prompts with your agent:
 
-- `Lint the skill in this directory for publishing readiness`
+- `Lint my Claude Code plugin at ./my-plugin and check every bundled skill`
 - `Check ~/projects/my-skill for spec compliance and fix any issues`
 - `Triage this skill and tell me what's blocking a GitHub release`
 
@@ -45,7 +45,7 @@ Run the script directly from the installed skill directory:
 ./scripts/skill-lint.py check ./my-skill --format json  # JSON output for CI
 ```
 
-Requires [uv](https://docs.astral.sh/uv/). Exit code: 1 if errors, 0 otherwise.
+Pointing at a repo root that has a `skill/` directory lints `skill/`. Requires [uv](https://docs.astral.sh/uv/). Exit code: 1 if errors, 0 otherwise.
 
 ## What Gets Checked
 
@@ -63,8 +63,4 @@ For the full rule list with severities and auto-fix status, see [`skill/SKILL.md
 
 ### Plugin layout
 
-When the lint target contains `.claude-plugin/plugin.json`, the linter switches to plugin mode: validates the manifest, checks each skill's script dependencies, and runs the per-skill rule pack across all `skills/<name>/` directories. Single-skill repos lint as before.
-
-### Repo root as target
-
-`skill-lint check .` from a repo that keeps its skill in `skill/` lints that subdirectory and says so on stderr. A SKILL.md at the root still wins, so legacy layouts are unchanged.
+When the lint target contains `.claude-plugin/plugin.json`, the linter switches to plugin mode: validates the manifest, checks each skill's script dependencies, and runs the per-skill rule pack across all `skills/<name>/` directories.
