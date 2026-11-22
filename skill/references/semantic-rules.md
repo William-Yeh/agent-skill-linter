@@ -14,16 +14,17 @@ human-facing documents) of the triage workflow.
 
 ### Should flag
 
-SKILL.md body and README contain the same substantive lines (even paraphrased):
+SKILL.md body and README convey the same substance, even when reworded:
 
 ```
 # SKILL.md body
 Run `skill-lint check .` to get the full picture.
 Fix errors before warnings — Rule 1 blocks publishing.
 
-# README.md (same content, slightly reworded)
-Run `skill-lint check .` to get the full picture.
-Fix errors before warnings — Rule 1 blocks publishing.
+# README.md (same content, reworded)
+Start with `skill-lint check .` so you see every finding at once.
+Clear the errors before the warnings: a Rule 1 failure stops you
+from publishing.
 ```
 
 ### Should not flag
@@ -40,8 +41,8 @@ Files share only incidental overlap (short lines, code snippets, headings):
 ...
 ```
 
-Overlap on lines shorter than ~20 characters, or on code blocks that must appear
-in both, is expected and fine.
+Overlap on headings, short labels, or code blocks that must appear in both is
+expected and fine.
 
 ### Judgment call
 
@@ -176,8 +177,8 @@ description: Use when handling HTTP 4xx/5xx errors.
 
 ### Judgment call
 
-Sentence-splitting on `.?!` is fragile — `X.Y.Z` and `4xx/5xx` are not sentence
-boundaries. Read the description as a human would. The test is: does it say *when
+Periods inside technical notation (`X.Y.Z`, `4xx/5xx`) are not sentence
+boundaries. The test is: does it say *when
 to trigger the skill*, or does it start explaining *what the skill does*? The
 former is correct; the latter belongs in the skill body.
 

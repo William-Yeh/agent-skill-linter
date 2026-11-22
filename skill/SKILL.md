@@ -161,7 +161,7 @@ Body length (Rule 9), non-standard dirs (Rule 10), skill isolation (Rule 17).
 | 4 | README badges (CI, license, Agent Skills) | Warning | Yes |
 | 5 | `.github/workflows/` has CI workflow | Warning | Yes |
 | 6 | README has Installation section | Warning | Yes |
-| 7 | README has Usage section with starter prompts + CLI subsection | Warning | Partial + Step 6 |
+| 7 | README has Usage section with starter prompts + CLI subsection | Warning (CLI subsection: Info) | Partial + Step 6 |
 | 9 | SKILL.md body < 500 lines | Info | — |
 | 10 | Non-standard directories flagged | Info | — |
 | 11 | CSO: description starts with "Use when..." | Warning | Step 5 |

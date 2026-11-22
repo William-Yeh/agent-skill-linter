@@ -225,19 +225,19 @@ jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7
         with:
           repository: William-Yeh/agent-skill-linter
           path: .agent-skill-linter
-      - uses: astral-sh/setup-uv@v6
+      - uses: astral-sh/setup-uv@v10.4.0
       - run: uv run .agent-skill-linter/skill/scripts/skill-lint.py check .
 
   validate:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v6
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.4.0
       - run: uvx --from skills-ref agentskills validate .
 """
 
@@ -328,6 +328,7 @@ After installing the skill, try these prompts with your agent:
 
 - `TODO: Add a starter prompt here`
 - `TODO: Add another starter prompt`
+- `TODO: Add a third starter prompt for a different scenario`
 
 ### CLI usage
 

@@ -36,12 +36,6 @@ Copy the skill directory to your agent's skill folder:
 | Codex | `.agents/skills/` |
 | Pi | `.pi/skills/` |
 | oh-my-pi | `.omp/skills/` |
-
-### As a CLI tool
-
-```bash
-uv tool install git+https://github.com/{owner}/{repo}
-```
 ````
 
 ### Plugin variant
